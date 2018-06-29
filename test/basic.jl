@@ -15,10 +15,7 @@ function hyper!(res, u)
 end
 
 z1 = L.ZeroProblem(circle!, u0=[0.9, 1.1], dim=1)
-z2 = L.ZeroProblem(plane!, dep=((z1, 2),), u0=[-1.1], dim=1)
-m1 = L.MonitorFunction(hyper!, dep=((z1, 1), (z2, 2)), pnames=[:p], active=false)
+z2 = L.ZeroProblem(plane!, deps=[(z1, 1),], u0=[-1.1], dim=1)
+m1 = L.MonitorFunction(hyper!, deps=[(z1, 1), (z2, 1)], pnames=[:p], active=false)
 
-prob = L.ContinuationProblem()
-L.add(prob, z1)
-L.add(prob, z2)
-L.add(prob, m1)
+prob = L.constructproblem([z1, z2], [m1])
