@@ -8,9 +8,11 @@ abstract type EmbeddedProblem{T <: Number} end
 
 #--- Zero problems
 
+const DependVar = Union{Symbol, Int, UnitRange}
+
 mutable struct ZeroProblem{T, F}  <: EmbeddedProblem{T}
     func::F  # underlying function ϕ:ℝⁿ→ℝᵐ
-    deps::Vector{Tuple{ZeroProblem, Any}}  # dependencies
+    deps::Vector{Tuple{ZeroProblem, DependVar}}  # dependencies
     u::Vector{T}  # storage for the input vector
     nk::Int  # dimension of the input (dependencies)
     nf::Int  # dimension of the input (new variables); n = nk + nf
@@ -23,9 +25,9 @@ function ZeroProblem(func;
         deps::AbstractVector{Tuple{T, S}}=Tuple{ZeroProblem, Int}[],
         u0::AbstractVector{R}=[],
         dim::Int=0) where {R <: Number, T <: ZeroProblem, S}
-    if R == Any
+    if !(R <: Number)
         if length(u0) != 0
-            throw(ArgumentError("u0 cannot be an Any type array"))
+            throw(ArgumentError("u0 must be a numerical array"))
         end
         # Get the type from the dependencies
         if length(deps) == 0
@@ -37,8 +39,11 @@ function ZeroProblem(func;
     end
     # Get an initial copy of the dependencies and build u (mostly for space allocation)
     u = Vector{RR}()
-    newdeps = Vector{Tuple{ZeroProblem, Any}}()  # needed because can't autoconvert
+    newdeps = Vector{Tuple{ZeroProblem, DependVar}}()  # needed because can't autoconvert from Any
     for dep in deps
+        if !(dep[2] isa DependVar)
+            throw(ArgumentError("Dependencies must be specified as a symbol, an Int, or a UnitRange"))
+        end
         push!(newdeps, dep)
         append!(u, dep[1].u[varindex(dep[1], dep[2])])
     end
@@ -57,7 +62,7 @@ end
 
 struct MonitorFunction{T, F} <: EmbeddedProblem{T}
     func::F  # underlying function ψ:ℝⁿ→ℝʳ
-    deps::Vector{Tuple{ZeroProblem, Any}}  # dependencies
+    deps::Vector{Tuple{ZeroProblem, DependVar}}  # dependencies
     pnames::Vector{Symbol}  # continuation parameter names (size r; cannot change size)
     active::Vector{Bool}  # whether or not the continuation parameters are active
     u::Vector{T}  # storage for the input vector
@@ -75,8 +80,11 @@ function MonitorFunction(func;
     RR = eltype(deps[1][1].u)
     # Get an initial copy of the dependencies and build u (mostly for space allocation)
     u = Vector{RR}()
-    newdeps = Vector{Tuple{ZeroProblem, Any}}()  # needed because can't autoconvert
+    newdeps = Vector{Tuple{ZeroProblem, DependVar}}()  # needed because can't autoconvert
     for dep in deps
+        if !(dep[2] isa DependVar)
+            throw(ArgumentError("Dependencies must be specified as a symbol, an Int, or a UnitRange"))
+        end
         push!(newdeps, dep)
         append!(u, dep[1].u[varindex(dep[1], dep[2])])
     end
@@ -98,13 +106,13 @@ vars(x) = Symbol[]  # by default don't export any variables (generic fallback)
 vars(problem::ZeroProblem) = vars(problem.func)
 
 # varindex ignores dependencies (TODO: docstrings)
-function varindex(problem::ZeroProblem, idx::Union{Int, AbstractVector{Int}})
+function varindex(problem::ZeroProblem, idx::Union{Int, UnitRange})
     if any(idx > problem.nf)
         throw(ArgumentError("Index requested is larger than the number of state variables (varindex ignores dependencies)"))
     end
     idx
 end
-varindex(problem::ZeroProblem, sym::Union{Symbol, AbstractVector{Symbol}}) = varindex(problem.func, sym)
+varindex(problem::ZeroProblem, sym::Symbol) = varindex(problem.func, sym)
 
 # Parameters exported by problem definitions that can be reused
 pars(x) = Symbol[]
@@ -142,6 +150,8 @@ function constructproblem(zeroproblems, monitorfunctions)
         if length(zp.deps) > 0
             resize!(zp.idxk, 0)
             for dep in zp.deps
+                # NOTE: varindex ignores dependencies because otherwise it would
+                # be possible to construct cyclic dependencies that never end
                 append!(zp.idxk, dep[1].idxf - 1 + varindex(dep[1], dep[2]))
             end
         end
