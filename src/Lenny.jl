@@ -1,6 +1,6 @@
 module Lenny
 
-using Compat: undef
+using Compat
 
 #--- Embedded problems (i.e., smooth problems)
 
@@ -19,6 +19,7 @@ mutable struct ZeroProblem{T, F}  <: EmbeddedProblem{T}
     m::Int  # dimension of output
     idxk::Vector{Int}  # index into the master u variable of dependencies
     idxf::Int  # start index into the master u variable of new variables
+    idxres::Int  # start index into the master res variable
 end
 
 function ZeroProblem(func;
@@ -55,18 +56,21 @@ function ZeroProblem(func;
         dim = getdim(func, u)
     end
     # Construct!
-    ZeroProblem(func, newdeps, u, nk, nf, dim, fill(0, nk), 0)
+    ZeroProblem(func, newdeps, u, nk, nf, dim, fill(0, nk), 0, 0)
 end
 
 #--- Monitor functions
 
-struct MonitorFunction{T, F} <: EmbeddedProblem{T}
+mutable struct MonitorFunction{T, F} <: EmbeddedProblem{T}
     func::F  # underlying function ψ:ℝⁿ→ℝʳ
     deps::Vector{Tuple{ZeroProblem, DependVar}}  # dependencies
     pnames::Vector{Symbol}  # continuation parameter names (size r; cannot change size)
     active::Vector{Bool}  # whether or not the continuation parameters are active
     u::Vector{T}  # storage for the input vector
+    nk::Int  # dimension of the input (dependencies)
+    r::Int  # number of continuation parameters
     idxk::Vector{Int}  # index into the master u variable for dependencies
+    idxres::Int  # start index into the master res variable
 end
 
 function MonitorFunction(func;
@@ -88,14 +92,16 @@ function MonitorFunction(func;
         push!(newdeps, dep)
         append!(u, dep[1].u[varindex(dep[1], dep[2])])
     end
+    nk = length(u)
+    r = length(pnames)
     # Check for active being a scalar
     if active isa AbstractVector
-        if length(active) != length(pnames)
+        if length(active) != r
             throw(ArgumentError("active should either be a scalar Bool or a vector of Bools of the same length as pnames"))
         end
-        MonitorFunction(func, newdeps, pnames, active, u, fill(0, length(u)))
+        MonitorFunction(func, newdeps, pnames, active, u, nk, r, fill(0, nk), 0)
     else
-        MonitorFunction(func, newdeps, pnames, fill(active, length(pnames)), u, fill(0, length(u)))
+        MonitorFunction(func, newdeps, pnames, fill(active, r), u, nk, r, fill(0, nk), 0)
     end
 end
 
@@ -138,6 +144,7 @@ function constructproblem(zeroproblems, monitorfunctions)
     m = 0
     for zp in zeroproblems
         zp.idxf = n+1
+        zp.idxres = m+1
         n += zp.nf
         m += zp.m
     end
@@ -156,16 +163,14 @@ function constructproblem(zeroproblems, monitorfunctions)
             end
         end
     end
+    r = 0
     for mf in monitorfunctions
+        mf.idxres = m+r+1
+        r += mf.r
         resize!(mf.idxk, 0)
         for dep in mf.deps
             append!(mf.idxk, dep[1].idxf - 1 + varindex(dep[1], dep[2]))
         end
-    end
-    # Get the total number of continuation parameters
-    r = 0
-    for monitorfunction in monitorfunctions
-        r += length(monitorfunction.pnames)
     end
     μ = zeros(T, r)
     res = zeros(T, m+r)
@@ -173,8 +178,49 @@ function constructproblem(zeroproblems, monitorfunctions)
     ConstructedProblem((zeroproblems...,), (monitorfunctions...,), u, μ, res)
 end
 
-function evaluate(prob::ConstructedProblem, u::AbstractVector, μ::AbstractVector)
-
+function evaluate!(problem::ConstructedProblem)
+    evaluate!(problem, problem.zeroproblems)
+    evaluate!(problem, problem.monitorfunctions)
+    nothing
 end
+
+@generated function evaluate!(problem::ConstructedProblem, embeddedproblems::Tuple)
+    # Some nice macro magic to ensure that static dispatch is used - since the
+    # problem structure doesn't change very frequently (if at all) the
+    # compilation time associated with generated functions is not a problem
+    :(tuple($((:(evaluate!(problem, embeddedproblems[$i])) for i in 1:length(embeddedproblems.parameters))...)))
+end
+
+function copydependencies!(em::EmbeddedProblem, u::AbstractVector)
+    for i = 1:em.nk
+        em.u[i] = u[em.idxk[i]]
+    end
+end
+
+function evaluate!(problem::ConstructedProblem, zp::ZeroProblem)
+    # Copy in the dependencies
+    copydependencies!(zp, problem.u)
+    # Copy in the state
+    idxf = zp.idxf
+    for i = zp.nk+1:zp.nk+zp.nf
+        zp.u[i] = problem.u[idxf]  # TODO: problem on this line
+        idxf += 1
+    end
+    # Evaluate the function
+    evaluate!(view(problem.res, zp.idxres:zp.idxres+zp.m-1), zp.func, zp.u)
+end
+
+function evaluate!(problem::ConstructedProblem, mf::MonitorFunction)
+    # Copy in the dependencies
+    copydependencies!(mf, problem.u)
+    # Evaluate the function
+    evaluate!(view(problem.res, mf.idxres:mf.idxres+mf.r-1), mf.func, mf.u)
+end
+
+# Generic fallback
+function evaluate!(res::AbstractVector, zp::Function, u::AbstractVector)
+    zp(res, u)
+end
+
 
 end # module
