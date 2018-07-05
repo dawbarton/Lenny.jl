@@ -1,6 +1,7 @@
-authors = ["David AW Barton <david.barton@bristol.ac.uk>"]
 name = "Lenny"
 uuid = "02fcf570-795a-11e8-0d4a-69b2fa226408"
+authors = ["David AW Barton <david.barton@bristol.ac.uk>"]
 version = "0.1.0"
 
 [deps]
+Compat = "34da2185-b29b-5c13-b0c7-acf172513d20"

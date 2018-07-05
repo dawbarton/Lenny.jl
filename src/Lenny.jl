@@ -188,7 +188,11 @@ end
     # Some nice macro magic to ensure that static dispatch is used - since the
     # problem structure doesn't change very frequently (if at all) the
     # compilation time associated with generated functions is not a problem
-    :(tuple($((:(evaluate!(problem, embeddedproblems[$i])) for i in 1:length(embeddedproblems.parameters))...)))
+    func = quote end
+    for i in 1:length(embeddedproblems.parameters)
+        push!(func.args, :(evaluate!(problem, embeddedproblems[$i])))
+    end
+    func
 end
 
 function copydependencies!(em::EmbeddedProblem, u::AbstractVector)
@@ -203,11 +207,12 @@ function evaluate!(problem::ConstructedProblem, zp::ZeroProblem)
     # Copy in the state
     idxf = zp.idxf
     for i = zp.nk+1:zp.nk+zp.nf
-        zp.u[i] = problem.u[idxf]  # TODO: problem on this line
+        zp.u[i] = problem.u[idxf]
         idxf += 1
     end
     # Evaluate the function
     evaluate!(view(problem.res, zp.idxres:zp.idxres+zp.m-1), zp.func, zp.u)
+    nothing
 end
 
 function evaluate!(problem::ConstructedProblem, mf::MonitorFunction)
