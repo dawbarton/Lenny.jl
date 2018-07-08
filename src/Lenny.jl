@@ -6,23 +6,28 @@ using Compat
 
 abstract type EmbeddedProblem{T <: Number} end
 
-#--- Zero problems
+#--- Helpers
+
+const ContiguousView = SubArray{T, 1, Array{T,1}, Tuple{UnitRange{Int}}, true} where T
 
 const DependVar = Union{Symbol, Int, UnitRange}
 
+#--- Zero problems
+
 mutable struct ZeroProblem{T, F}  <: EmbeddedProblem{T}
-    func::F  # underlying function ϕ:ℝⁿ→ℝᵐ
-    deps::Vector{Tuple{ZeroProblem, DependVar}}  # dependencies
+    f::F  # underlying function f:ℝⁿ→ℝᵐ
+    k::Vector{Tuple{ZeroProblem, DependVar}}  # dependencies
     u::Vector{T}  # storage for the input vector
-    nk::Int  # dimension of the input (dependencies)
-    nf::Int  # dimension of the input (new variables); n = nk + nf
+    res::Vector{T}  # storage for output vector
+    nₖ::Int  # dimension of the input (dependencies)
+    nₙ::Int  # dimension of the input (new variables); n = nₖ + nₙ
     m::Int  # dimension of output
-    idxk::Vector{Int}  # index into the master u variable of dependencies
-    idxf::Int  # start index into the master u variable of new variables
-    idxres::Int  # start index into the master res variable
+    iₖ::Vector{Int}  # index into master u (dependencies)
+    iₙ::Int  # index into master u (new variables)
+    iᵣ::Int  # index into master res
 end
 
-function ZeroProblem(func;
+function ZeroProblem(f;
         deps::AbstractVector{Tuple{T, S}}=Tuple{ZeroProblem, Int}[],
         u0::AbstractVector{R}=[],
         dim::Int=0) where {R <: Number, T <: ZeroProblem, S}
@@ -43,37 +48,39 @@ function ZeroProblem(func;
     newdeps = Vector{Tuple{ZeroProblem, DependVar}}()  # needed because can't autoconvert from Any
     for dep in deps
         if !(dep[2] isa DependVar)
-            throw(ArgumentError("Dependencies must be specified as a symbol, an Int, or a UnitRange"))
+            throw(ArgumentError("Dependencies must be specified as a Symbol, an Int, or a UnitRange"))
         end
         push!(newdeps, dep)
         append!(u, dep[1].u[varindex(dep[1], dep[2])])
     end
-    nk = length(u)
+    nₖ = length(u)
     append!(u, u0)
-    nf = length(u0)
-    # Get the dimension if it isn't provided
+    nₙ = length(u0)
+    # Get the output dimension if it isn't provided
     if dim == 0
-        dim = getdim(func, u)
+        dim = getdim(f, u)
     end
+    res = Vector{RR}(undef, dim)
     # Construct!
-    ZeroProblem(func, newdeps, u, nk, nf, dim, fill(0, nk), 0, 0)
+    ZeroProblem(f, newdeps, u, res, nₖ, nₙ, dim, zeros(Int, nₖ), 0, 0)
 end
 
 #--- Monitor functions
 
 mutable struct MonitorFunction{T, F} <: EmbeddedProblem{T}
-    func::F  # underlying function ψ:ℝⁿ→ℝʳ
-    deps::Vector{Tuple{ZeroProblem, DependVar}}  # dependencies
-    pnames::Vector{Symbol}  # continuation parameter names (size r; cannot change size)
+    f::F  # underlying function f:ℝⁿ→ℝʳ
+    k::Vector{Tuple{ZeroProblem, DependVar}}  # dependencies
+    p::Vector{Symbol}  # continuation parameter names (size r; cannot change size)
     active::Vector{Bool}  # whether or not the continuation parameters are active
     u::Vector{T}  # storage for the input vector
-    nk::Int  # dimension of the input (dependencies)
-    r::Int  # number of continuation parameters
-    idxk::Vector{Int}  # index into the master u variable for dependencies
-    idxres::Int  # start index into the master res variable
+    res::Vector{T}  # storage for output vector
+    nₖ::Int  # dimension of the input (dependencies)
+    r::Int  # number of continuation parameters (= number of outputs)
+    iₖ::Vector{Int}  # index into master u (dependencies)
+    iᵣ::Int  # index into master res
 end
 
-function MonitorFunction(func;
+function MonitorFunction(f;
         deps::AbstractVector{Tuple{T, S}}=Tuple{ZeroProblem, Int}[],
         pnames::AbstractVector{Symbol}=Symbol[],
         active::Union{AbstractVector{Bool}, Bool}=Bool[]) where {T <: ZeroProblem, S}
@@ -92,138 +99,182 @@ function MonitorFunction(func;
         push!(newdeps, dep)
         append!(u, dep[1].u[varindex(dep[1], dep[2])])
     end
-    nk = length(u)
+    nₖ = length(u)
     r = length(pnames)
+    res = Vector{RR}(undef, r)
     # Check for active being a scalar
     if active isa AbstractVector
         if length(active) != r
             throw(ArgumentError("active should either be a scalar Bool or a vector of Bools of the same length as pnames"))
         end
-        MonitorFunction(func, newdeps, pnames, active, u, nk, r, fill(0, nk), 0)
+        _active = active
     else
-        MonitorFunction(func, newdeps, pnames, fill(active, r), u, nk, r, fill(0, nk), 0)
+        _active = fill(active, r)
     end
+    MonitorFunction(f, newdeps, pnames, _active, u, res, nₖ, r, zeros(Int, nₖ), 0)
 end
 
 #--- Continuation variables and parameters
 
 # Variables exported by problem definitions that can be reused
 vars(x) = Symbol[]  # by default don't export any variables (generic fallback)
-vars(problem::ZeroProblem) = vars(problem.func)
+vars(problem::ZeroProblem) = vars(problem.f)
 
 # varindex ignores dependencies (TODO: docstrings)
 function varindex(problem::ZeroProblem, idx::Union{Int, UnitRange})
-    if any(idx > problem.nf)
+    # TODO: should this just assume inbounds?
+    if any(idx > problem.nₙ)
         throw(ArgumentError("Index requested is larger than the number of state variables (varindex ignores dependencies)"))
     end
     idx
 end
-varindex(problem::ZeroProblem, sym::Symbol) = varindex(problem.func, sym)
+varindex(problem::ZeroProblem, sym::Symbol) = varindex(problem.f, sym)
 
 # Parameters exported by problem definitions that can be reused
 pars(x) = Symbol[]
-pars(problem::MonitorFunction) = problem.pnames
+pars(problem::MonitorFunction) = problem.p
 
 #--- Constructed problem
 
-struct ConstructedProblem{F, G, T <: Number}
-    zeroproblems::F  # ϕ:ℝⁿ→ℝᵐ
-    monitorfunctions::G  # ψ:ℝⁿ→ℝʳ
-    u::Vector{T}  # dimension n
-    μ::Vector{T}  # dimension r
-    res::Vector{T}  # dimension m+r
+# mutable struct ConstructedProblem{T <: Number,
+#                                   NΦ, NΨ,
+#                                   F <: Tuple{Vararg{ZeroProblem{T, FF} where {FF}, NΦ}},
+#                                   G <: Tuple{Vararg{MonitorFunction{T, GG} where {GG}, NΨ}}}
+mutable struct ConstructedProblem{F, G}
+    Φ::F  # Φ:ℝⁿ→ℝᵐ
+    Ψ::G  # Ψ:ℝⁿ→ℝʳ
+    n::Int  # dimension of (all) state
+    m::Int  # dimension of zero problem output
+    r::Int  # dimension of monitor function output
+end
+
+function pullu!(u::AbstractVector, prob::ConstructedProblem)
+    for ϕ in prob.Φ
+        j = ϕ.iₙ
+        for i = ϕ.nₖ+(1:ϕ.nₙ)
+            u[j] = ϕ.u[i]
+            j += 1
+        end
+    end
+end
+
+function pushu!(prob::ConstructedProblem, u::AbstractVector)
+    for ϕ in prob.Φ
+        # Dependencies
+        i = 1
+        for j = ϕ.iₖ
+            ϕ.u[i] = u[j]
+            i += 1
+        end
+        # Everything else
+        j = ϕ.iₙ
+        for i = ϕ.nₖ+(1:ϕ.nₙ)
+            ϕ.u[i] = u[j]
+            j += 1
+        end
+    end
+end
+
+function resizeproblem!(prob::ConstructedProblem)
+    # Determine the new problem size
+    iₙ = 0
+    iᵣ = 0
+    for ϕ in prob.Φ
+        ϕ.iₙ = iₙ+1
+        iₙ += ϕ.nₙ
+        ϕ.iᵣ = iᵣ+1
+        iᵣ += ϕ.m
+    end
+    prob.n = iₙ
+    prob.m = iᵣ
+    for ψ in prob.Ψ
+        ψ.iᵣ = iᵣ+1
+        iᵣ += ψ.r
+    end
+    # Update the dependencies
+    for ϕ in prob.Φ
+        resize!(ϕ.iₖ, 0)
+        for k in ϕ.k
+            # NOTE: varindex ignores dependencies because otherwise it would
+            # be possible to construct cyclic dependencies that never end
+            append!(ϕ.iₖ, k[1].iₙ - 1 + varindex(k[1], k[2]))
+        end
+    end
+    for ψ in prob.Ψ
+        resize!(ψ.iₖ, 0)
+        for k in ψ.k
+            append!(ψ.iₖ, k[1].iₙ - 1 + varindex(k[1], k[2]))
+        end
+    end
+    prob
 end
 
 function constructproblem(zeroproblems, monitorfunctions)
     # TODO: check for unique zeroproblems/monitorfunctions (i.e., no accidental repeats)
     # Get the underlying numerical type
     T = eltype(zeroproblems[1].u)  # this should always be valid due to the outer constructors of ZeroProblem and MonitorFunction
-    # TODO: This should almost entirely go in a resize function
-    # Get the total number of continuation variables and update indices of continuation variables
     n = 0
     m = 0
-    for zp in zeroproblems
-        zp.idxf = n+1
-        zp.idxres = m+1
-        n += zp.nf
-        m += zp.m
-    end
-    u = Vector{T}(undef, n)
-    # Copy u0 and update indices of the dependencies
-    for zp in zeroproblems
-        for i in 1:zp.nf
-            u[i - 1 + zp.idxf] = zp.u[i + zp.nk]
-        end
-        if length(zp.deps) > 0
-            resize!(zp.idxk, 0)
-            for dep in zp.deps
-                # NOTE: varindex ignores dependencies because otherwise it would
-                # be possible to construct cyclic dependencies that never end
-                append!(zp.idxk, dep[1].idxf - 1 + varindex(dep[1], dep[2]))
-            end
-        end
-    end
     r = 0
-    for mf in monitorfunctions
-        mf.idxres = m+r+1
-        r += mf.r
-        resize!(mf.idxk, 0)
-        for dep in mf.deps
-            append!(mf.idxk, dep[1].idxf - 1 + varindex(dep[1], dep[2]))
-        end
+    for ϕ in zeroproblems
+        n += ϕ.nₙ
+        m += ϕ.m
     end
-    μ = zeros(T, r)
-    res = zeros(T, m+r)
+    for ψ in monitorfunctions
+        r += ψ.r
+    end
     # Construct!
-    ConstructedProblem((zeroproblems...,), (monitorfunctions...,), u, μ, res)
+    resizeproblem!(ConstructedProblem((zeroproblems...,), (monitorfunctions...,), n, m, r))
 end
 
-function evaluate!(problem::ConstructedProblem)
-    evaluate!(problem, problem.zeroproblems)
-    evaluate!(problem, problem.monitorfunctions)
+function evaluate!(res::AbstractVector{T}, problem::ConstructedProblem, u::AbstractVector{T}) where T
+    evaluate!(res, u, problem.Φ)
+    evaluate!(res, u, problem.Ψ)
     nothing
 end
 
-@generated function evaluate!(problem::ConstructedProblem, embeddedproblems::Tuple)
+@generated function evaluate!(res::AbstractVector{T}, embeddedproblems::Tuple, u::AbstractVector{T}) where T
     # Some nice macro magic to ensure that static dispatch is used - since the
     # problem structure doesn't change very frequently (if at all) the
     # compilation time associated with generated functions is not a problem
-    func = quote end
+    f = quote end
     for i in 1:length(embeddedproblems.parameters)
-        push!(func.args, :(evaluate!(problem, embeddedproblems[$i])))
+        push!(f.args, :(evaluate!(res, embeddedproblems[$i], u)))
     end
-    func
+    f
 end
 
-function copydependencies!(em::EmbeddedProblem, u::AbstractVector)
-    for i = 1:em.nk
-        em.u[i] = u[em.idxk[i]]
+function copydependencies!(em::EmbeddedProblem{T}, u::AbstractVector{T}) where T
+    i = 1
+    for iₖ in em.iₖ
+        em.u[i] = u[iₖ]
+        i += 1
     end
 end
 
-function evaluate!(problem::ConstructedProblem, zp::ZeroProblem)
+function evaluate!(res::AbstractVector{T}, ϕ::ZeroProblem{T}, u::AbstractVector{T}) where T
     # Copy in the dependencies
-    copydependencies!(zp, problem.u)
+    copydependencies!(ϕ, u)
     # Copy in the state
-    idxf = zp.idxf
-    for i = zp.nk+1:zp.nk+zp.nf
-        zp.u[i] = problem.u[idxf]
-        idxf += 1
+    iₙ = ϕ.iₙ
+    for i = ϕ.nₖ+(1:ϕ.nₙ)
+        ϕ.u[i] = u[iₙ]
+        iₙ += 1
     end
     # Evaluate the function
-    evaluate!(view(problem.res, zp.idxres:zp.idxres+zp.m-1), zp.func, zp.u)
+    @views evaluate!(res[ϕ.iᵣ-1+(1:ϕ.m)], ϕ.f, ϕ.u)
     nothing
 end
 
-function evaluate!(problem::ConstructedProblem, mf::MonitorFunction)
+function evaluate!(res::AbstractVector{T}, ψ::MonitorFunction{T}, u::AbstractVector{T}) where T
     # Copy in the dependencies
-    copydependencies!(mf, problem.u)
+    copydependencies!(ψ, u)
     # Evaluate the function
-    evaluate!(view(problem.res, mf.idxres:mf.idxres+mf.r-1), mf.func, mf.u)
+    @views evaluate!(res[ψ.iᵣ-1+(1:ψ.r)], ψ.f, ψ.u)
 end
 
 # Generic fallback
-function evaluate!(res::AbstractVector, zp::Function, u::AbstractVector)
+function evaluate!(res::AbstractVector{T}, zp::Function, u::AbstractVector{T}) where T
     zp(res, u)
 end
 
