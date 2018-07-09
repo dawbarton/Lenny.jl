@@ -1,6 +1,7 @@
 module Lenny
 
 using Compat
+using NLsolve: nlsolve, converged, OnceDifferentiable
 
 #--- Embedded problems (i.e., smooth problems)
 
@@ -300,5 +301,10 @@ function evaluate!(res::AbstractVector{T}, zp::Function, u::AbstractVector{T}) w
     zp(res, u)
 end
 
+function solve!(prob::ConstructedProblem, u::AbstractVector)
+    res = similar(u)
+    df = OnceDifferentiable((res, u) -> evaluate!(res, prob, u), u, res)
+    nlsolve(df, u)
+end
 
 end # module
