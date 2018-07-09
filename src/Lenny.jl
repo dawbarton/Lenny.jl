@@ -269,7 +269,7 @@ end
 
 function copydependencies!(em::EmbeddedProblem{T}, u::AbstractVector{T}) where T
     i = 1
-    for iₖ in em.iₖ
+    @inbounds for iₖ in em.iₖ
         em.u[i] = u[iₖ]
         i += 1
     end
@@ -280,12 +280,12 @@ function evaluate!(res::AbstractVector{T}, ϕ::ZeroProblem{T}, u::AbstractVector
     copydependencies!(ϕ, u)
     # Copy in the state
     iₙ = ϕ.iₙ
-    for i = ϕ.nₖ .+ (1:ϕ.nₙ)
+    @inbounds for i = ϕ.nₖ .+ (1:ϕ.nₙ)
         ϕ.u[i] = u[iₙ]
         iₙ += 1
     end
     # Evaluate the function
-    @views evaluate!(res[ϕ.iᵣ .- 1 .+ (1:ϕ.m)], ϕ.f, ϕ.u)
+    @inbounds @views evaluate!(res[ϕ.iᵣ .- 1 .+ (1:ϕ.m)], ϕ.f, ϕ.u)
     nothing
 end
 
@@ -293,7 +293,7 @@ function evaluate!(res::AbstractVector{T}, ψ::MonitorFunction{T}, u::AbstractVe
     # Copy in the dependencies
     copydependencies!(ψ, u)
     # Evaluate the function
-    @views evaluate!(res[ψ.iᵣ .- 1 .+ (1:ψ.r)], ψ.f, ψ.u)
+    @inbounds @views evaluate!(res[ψ.iᵣ .- 1 .+ (1:ψ.r)], ψ.f, ψ.u)
 end
 
 # Generic fallback
