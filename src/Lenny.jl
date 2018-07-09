@@ -136,10 +136,6 @@ pars(problem::MonitorFunction) = problem.p
 
 #--- Constructed problem
 
-# mutable struct ConstructedProblem{T <: Number,
-#                                   NΦ, NΨ,
-#                                   F <: Tuple{Vararg{ZeroProblem{T, FF} where {FF}, NΦ}},
-#                                   G <: Tuple{Vararg{MonitorFunction{T, GG} where {GG}, NΨ}}}
 mutable struct ConstructedProblem{F, G}
     Φ::F  # Φ:ℝⁿ→ℝᵐ
     Ψ::G  # Ψ:ℝⁿ→ℝʳ
