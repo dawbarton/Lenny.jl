@@ -8,9 +8,9 @@ abstract type EmbeddedProblem{T <: Number} end
 
 #--- Helpers
 
-const ContiguousView = SubArray{T, 1, Array{T,1}, Tuple{UnitRange{Int}}, true} where T
-
 const DependVar = Union{Symbol, Int, UnitRange}
+
+function getdim end
 
 #--- Zero problems
 
@@ -30,7 +30,7 @@ end
 function ZeroProblem(f;
         deps::AbstractVector{Tuple{T, S}}=Tuple{ZeroProblem, Int}[],
         u0::AbstractVector{R}=[],
-        dim::Int=0) where {R <: Number, T <: ZeroProblem, S}
+        dim::Int=0) where {R, T <: ZeroProblem, S}
     if !(R <: Number)
         if length(u0) != 0
             throw(ArgumentError("u0 must be a numerical array"))
@@ -151,11 +151,12 @@ end
 function pullu!(u::AbstractVector, prob::ConstructedProblem)
     for ϕ in prob.Φ
         j = ϕ.iₙ
-        for i = ϕ.nₖ+(1:ϕ.nₙ)
+        for i = ϕ.nₖ .+ (1:ϕ.nₙ)
             u[j] = ϕ.u[i]
             j += 1
         end
     end
+    u
 end
 
 function pushu!(prob::ConstructedProblem, u::AbstractVector)
@@ -168,11 +169,20 @@ function pushu!(prob::ConstructedProblem, u::AbstractVector)
         end
         # Everything else
         j = ϕ.iₙ
-        for i = ϕ.nₖ+(1:ϕ.nₙ)
+        for i = ϕ.nₖ .+ (1:ϕ.nₙ)
             ϕ.u[i] = u[j]
             j += 1
         end
     end
+    for ψ in prob.Ψ
+        # Dependencies
+        i = 1
+        for j = ψ.iₖ
+            ψ.u[i] = u[j]
+            i += 1
+        end
+    end
+    u
 end
 
 function resizeproblem!(prob::ConstructedProblem)
@@ -210,7 +220,13 @@ function resizeproblem!(prob::ConstructedProblem)
 end
 
 function constructproblem(zeroproblems, monitorfunctions)
-    # TODO: check for unique zeroproblems/monitorfunctions (i.e., no accidental repeats)
+    # Check for unique zeroproblems/monitorfunctions (i.e., no accidental repeats)
+    if !allunique(zeroproblems)
+        throw(ArgumentError("Some zero problems are included multiple times"))
+    end
+    if !allunique(monitorfunctions)
+        throw(ArgumentError("Some monitor functions are included multiple times"))
+    end
     # Get the underlying numerical type
     T = eltype(zeroproblems[1].u)  # this should always be valid due to the outer constructors of ZeroProblem and MonitorFunction
     n = 0
@@ -219,18 +235,28 @@ function constructproblem(zeroproblems, monitorfunctions)
     for ϕ in zeroproblems
         n += ϕ.nₙ
         m += ϕ.m
+        for k in ϕ.k
+            if !(k[1] in zeroproblems)
+                throw(ArgumentError("Dependency is not included in the array of zero problems - $k"))
+            end
+        end
     end
     for ψ in monitorfunctions
         r += ψ.r
+        for k in ψ.k
+            if !(k[1] in zeroproblems)
+                throw(ArgumentError("Dependency is not included in the array of zero problems - $k"))
+            end
+        end
     end
     # Construct!
     resizeproblem!(ConstructedProblem((zeroproblems...,), (monitorfunctions...,), n, m, r))
 end
 
 function evaluate!(res::AbstractVector{T}, problem::ConstructedProblem, u::AbstractVector{T}) where T
-    evaluate!(res, u, problem.Φ)
-    evaluate!(res, u, problem.Ψ)
-    nothing
+    evaluate!(res, problem.Φ, u)
+    evaluate!(res, problem.Ψ, u)
+    res
 end
 
 @generated function evaluate!(res::AbstractVector{T}, embeddedproblems::Tuple, u::AbstractVector{T}) where T
@@ -257,12 +283,12 @@ function evaluate!(res::AbstractVector{T}, ϕ::ZeroProblem{T}, u::AbstractVector
     copydependencies!(ϕ, u)
     # Copy in the state
     iₙ = ϕ.iₙ
-    for i = ϕ.nₖ+(1:ϕ.nₙ)
+    for i = ϕ.nₖ .+ (1:ϕ.nₙ)
         ϕ.u[i] = u[iₙ]
         iₙ += 1
     end
     # Evaluate the function
-    @views evaluate!(res[ϕ.iᵣ-1+(1:ϕ.m)], ϕ.f, ϕ.u)
+    @views evaluate!(res[ϕ.iᵣ .- 1 .+ (1:ϕ.m)], ϕ.f, ϕ.u)
     nothing
 end
 
@@ -270,7 +296,7 @@ function evaluate!(res::AbstractVector{T}, ψ::MonitorFunction{T}, u::AbstractVe
     # Copy in the dependencies
     copydependencies!(ψ, u)
     # Evaluate the function
-    @views evaluate!(res[ψ.iᵣ-1+(1:ψ.r)], ψ.f, ψ.u)
+    @views evaluate!(res[ψ.iᵣ .- 1 .+ (1:ψ.r)], ψ.f, ψ.u)
 end
 
 # Generic fallback
