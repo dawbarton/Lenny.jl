@@ -3,10 +3,10 @@ module EmbeddedProblems
 #--- Exports
 
 # Exported types
-export EmbeddedProblem, ZeroProblem, MonitorFunction, ConstructedProblem
+export EmbeddedProblem, ZeroProblem, MonitorFunction, ClosedProblem
 
 # Exported functions
-export evaluate!, pullu!, pushu!, constructproblem
+export evaluate!, pullu!, pushu!, closeproblem
 
 #--- Dependencies
 
@@ -146,7 +146,7 @@ pars(problem::MonitorFunction) = problem.p
 
 #--- Constructed problem
 
-mutable struct ConstructedProblem{F, G}
+mutable struct ClosedProblem{F, G}
     Φ::F  # Φ:ℝⁿ→ℝᵐ
     Ψ::G  # Ψ:ℝⁿ→ℝʳ
     n::Int  # dimension of (all) state
@@ -154,7 +154,7 @@ mutable struct ConstructedProblem{F, G}
     r::Int  # dimension of monitor function output
 end
 
-function pullu!(u::AbstractVector, prob::ConstructedProblem)
+function pullu!(u::AbstractVector, prob::ClosedProblem)
     for ϕ in prob.Φ
         j = ϕ.iₙ
         for i = ϕ.nₖ .+ (1:ϕ.nₙ)
@@ -165,7 +165,7 @@ function pullu!(u::AbstractVector, prob::ConstructedProblem)
     u
 end
 
-function pushu!(prob::ConstructedProblem, u::AbstractVector)
+function pushu!(prob::ClosedProblem, u::AbstractVector)
     for ϕ in prob.Φ
         # Dependencies
         i = 1
@@ -191,7 +191,7 @@ function pushu!(prob::ConstructedProblem, u::AbstractVector)
     u
 end
 
-function resizeproblem!(prob::ConstructedProblem)
+function resizeproblem!(prob::ClosedProblem)
     # Determine the new problem size
     iₙ = 0
     iᵣ = 0
@@ -225,7 +225,7 @@ function resizeproblem!(prob::ConstructedProblem)
     prob
 end
 
-function constructproblem(zeroproblems, monitorfunctions)
+function closeproblem(zeroproblems, monitorfunctions)
     # Check for unique zeroproblems/monitorfunctions (i.e., no accidental repeats)
     if !allunique(zeroproblems)
         throw(ArgumentError("Some zero problems are included multiple times"))
@@ -256,10 +256,10 @@ function constructproblem(zeroproblems, monitorfunctions)
         end
     end
     # Construct!
-    resizeproblem!(ConstructedProblem((zeroproblems...,), (monitorfunctions...,), n, m, r))
+    resizeproblem!(ClosedProblem((zeroproblems...,), (monitorfunctions...,), n, m, r))
 end
 
-function evaluate!(res::AbstractVector{T}, problem::ConstructedProblem, u::AbstractVector{T}) where T
+function evaluate!(res::AbstractVector{T}, problem::ClosedProblem, u::AbstractVector{T}) where T
     evaluate!(res, problem.Φ, u)
     evaluate!(res, problem.Ψ, u)
     res
