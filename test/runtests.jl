@@ -8,5 +8,5 @@ using Lenny
 
 const L = Lenny
 
-#include("test_ConstructedProblem.jl")
+include("test_EmbeddedProblems.jl")
 include("test_Callbacks.jl")

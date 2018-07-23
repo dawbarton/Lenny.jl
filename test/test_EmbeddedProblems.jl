@@ -1,4 +1,4 @@
-@testset "ConstructedProblem" begin
+@testset "EmbeddedProblems" begin
 
 function circle!(res, u)
     res[1] = u[1]^2 + (u[2] - 1)^2 - 1
@@ -23,11 +23,11 @@ z2 = L.ZeroProblem(plane!, deps=[(z1, 1),], u0=[-1.1], dim=1)
 @test_throws ArgumentError L.MonitorFunction(hyper!, deps=[(z1, 1), (z2, 1)], pnames=[:p], active=[false, false])
 m1 = L.MonitorFunction(hyper!, deps=[(z1, 1), (z2, 1)], pnames=[:p], active=false)
 
-@test_throws ArgumentError L.constructproblem([z2], [m1])
-@test_throws ArgumentError L.constructproblem([z1, z2, z1], [m1])
-@test_throws ArgumentError L.constructproblem([z1], [m1])
-@test_throws ArgumentError L.constructproblem([z1, z2], [m1, m1])
-prob = L.constructproblem([z1, z2], [m1])
+@test_throws ArgumentError L.closeproblem([z2], [m1])
+@test_throws ArgumentError L.closeproblem([z1, z2, z1], [m1])
+@test_throws ArgumentError L.closeproblem([z1], [m1])
+@test_throws ArgumentError L.closeproblem([z1, z2], [m1, m1])
+prob = L.closeproblem([z1, z2], [m1])
 
 u = zeros(3)
 L.pullu!(u, prob) == [0.9, 1.1, -1.1]
