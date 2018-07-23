@@ -8,10 +8,6 @@ export EmbeddedProblem, ZeroProblem, MonitorFunction, ClosedProblem
 # Exported functions
 export evaluate!, pullu!, pushu!, closeproblem
 
-#--- Dependencies
-
-using Compat
-
 #--- Embedded problems (i.e., smooth problems)
 
 abstract type EmbeddedProblem{T <: Number} end
