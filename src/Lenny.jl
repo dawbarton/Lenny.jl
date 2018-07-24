@@ -13,6 +13,9 @@ using .EmbeddedProblems
 include("Callbacks.jl")
 using .Callbacks
 
+include("FSMs.jl")
+using .FSMs
+
 include("Covering.jl")
 using .Covering
 

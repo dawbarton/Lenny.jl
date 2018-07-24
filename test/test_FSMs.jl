@@ -1,6 +1,4 @@
-struct MyConstructedProblem{T <: Number} <: L.AbstractConstructedProblem{T}
-    callbacks::L.CallbackSignals
-    fsm::L.FSM
+struct MyProblem{T <: Number}
     output::Vector{T}
 end
 
@@ -18,18 +16,18 @@ for i = 1:length(fsm_states)
     end
 end
 
-function state1(problem::MyConstructedProblem, fsm::L.FSM)
+function state1(problem::MyProblem, fsm::L.FSM)
     push!(problem.output, 1)
     fsm.state = fsm.allstates[state2]
     fsm.next_state = fsm.allstates[state3]
 end
 
-function state2(problem::MyConstructedProblem, fsm::L.FSM)
+function state2(problem::MyProblem, fsm::L.FSM)
     push!(problem.output, 2)
     fsm.state = fsm.next_state
 end
 
-function state3(problem::MyConstructedProblem, fsm::L.FSM)
+function state3(problem::MyProblem, fsm::L.FSM)
     push!(problem.output, 3)
     fsm.run = false
 end
@@ -55,9 +53,9 @@ L.addcallback!(cb, "state2_after", state2_after)
 
 fsm = L.fsm_init!(cb, fsm_states)
 
-problem = MyConstructedProblem(cb, fsm, Int[])
+problem = MyProblem(Int[])
 
-L.fsm_run!(problem)
+L.fsm_run!(problem, fsm)
 
 @test problem.output == [1, -1, -2, 2, -3, 3]
 
