@@ -10,3 +10,4 @@ const L = Lenny
 
 include("test_EmbeddedProblems.jl")
 include("test_Callbacks.jl")
+include("test_Covering.jl")

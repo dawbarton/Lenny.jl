@@ -4,6 +4,9 @@ module Lenny
 
 using NLsolve: nlsolve, converged, OnceDifferentiable
 
+# This is to sidestep circular dependencies (and may be convenient for other reasons as well)
+abstract type AbstractConstructedProblem{T <: Number} end
+
 include("EmbeddedProblems.jl")
 using .EmbeddedProblems
 
@@ -40,9 +43,11 @@ function Base.push!(prob::ContinuationProblem, ϕ::Union{ZeroProblem, MonitorFun
     prob
 end
 
-struct ConstructedProblem{T <: Number, F, G}
+struct ConstructedProblem{T <: Number, F, G} <: AbstractConstructedProblem{T}
     efuncs::ClosedProblem{F, G}
-    solutions::Vector{Vector{T}}
+    callbacks::CallbackSignals
+    fsm::FSM
+    atlas
 end
 
 function solve!(prob::ConstructedProblem, u::AbstractVector)
