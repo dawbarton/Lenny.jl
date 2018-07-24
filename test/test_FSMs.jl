@@ -44,7 +44,7 @@ function state2_after(problem)
     push!(problem.output, -3)
 end
 
-@testset "Covering" begin
+@testset "Finite state machine" begin
 
 cb = L.CallbackSignals()
 L.addcallback!(cb, "state2_before", state2_before1)
