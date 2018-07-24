@@ -28,19 +28,24 @@ function Base.isvalid(callbacks::CallbackSignals)
 end
 
 """
-    addcallback!(callbacks::CallbackSignals, signal::CallbackSignal, callback)
+    addcallback!(callbacks::CallbackSignals, signal::CallbackSignal, callback; first=false)
 
 Add the callback to `signal`. Existence of the corresponding signal is not
-checked (see `isvalid`).
+checked (see `isvalid`). If `first` is true, the callback is added to the front
+of the list of callbacks rather than the end.
 """
-function addcallback!(callbacks::CallbackSignals, signal::CallbackSignal, callback)
+function addcallback!(callbacks::CallbackSignals, signal::CallbackSignal, callback; first=false)
     if !(signal in keys(callbacks.callbacks))
         callbacks.callbacks[signal] = Vector{Any}()
     end
     if callback in callbacks.callbacks[signal]
         throw(ArgumentError("Callback has already been added to that signal ($signal)"))
     end
-    push!(callbacks.callbacks[signal], callback)
+    if first
+        pushfirst!(callbacks.callbacks[signal], callback)
+    else
+        push!(callbacks.callbacks[signal], callback)
+    end
     callbacks
 end
 
