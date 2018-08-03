@@ -2,13 +2,11 @@ module Lenny
 
 # maybe look at FastGaussQuadrature.jl
 
-using NLsolve: nlsolve, converged, OnceDifferentiable
+abstract type AbstractClosedProblem{T <: Number} end
+abstract type AbstractContinuationProblem{T <: Number} end
 
-# This is to sidestep circular dependencies (and may be convenient for other reasons as well)
-abstract type AbstractConstructedProblem{T <: Number} end
-
-include("EmbeddedProblems.jl")
-using .EmbeddedProblems
+include("EmbeddedFunctions.jl")
+using .EmbeddedFunctions
 
 include("Callbacks.jl")
 using .Callbacks
@@ -19,44 +17,21 @@ using .FSMs
 include("Covering.jl")
 using .Covering
 
-struct ContinuationProblem
-    p::Vector{Symbol}
-    Φ::Vector{Union{ZeroProblem{T}, MonitorFunction{T}}} where {T <: Number}
-end
+include("Toolboxes.jl")
+using .Toolboxes
 
-function Base.push!(prob::ContinuationProblem, ϕ::Union{ZeroProblem, MonitorFunction})
-    if ϕ in prob.Φ
-        throw(ArgumentError("ϕ has already been added to the continuation problem"))
-    end
-    for k in ϕ.k
-        if !(k[1] in prob.Φ)
-            push!(prob, k[1])
-        end
-    end
-    if ϕ isa MonitorFunction
-        for p in ϕ.p
-            if p in prob.p
-                throw(ArgumentError("Duplicate continuation parameter - $p"))
-            else
-                push!(prob.p, p)
-            end
-        end
-    end
-    push!(prob.Φ, ϕ)
-    prob
-end
+include("Solvers.jl")
+using .Solvers
 
-struct ConstructedProblem{T <: Number, F, G} <: AbstractConstructedProblem{T}
-    efuncs::ClosedProblem{F, G}
+struct ContinuationProblem{T <: Number, C <: AbstractCovering, S <: AbstractSolver} <: AbstractContinuationProblem{T}
+    u::Vector{StateVar{T}}
+    Φ::Vector{ZeroFunction{T}}
+    Ψ::Vector{MonitorFunction{T}}
     callbacks::CallbackSignals
-    fsm::FSM
-    atlas
+    covering::C
+    solver::S
+    toolboxes::Vector{AbstractToolbox}
 end
 
-function solve!(prob::ConstructedProblem, u::AbstractVector)
-    res = similar(u)
-    df = OnceDifferentiable((res, u) -> evaluate!(res, prob, u), u, res)
-    nlsolve(df, u)
-end
 
 end # module

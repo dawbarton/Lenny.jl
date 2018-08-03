@@ -1,5 +1,14 @@
 module Covering
 
+#--- Exports
+
+# Exported types
+export AbstractCovering
+
+#--- AbstractCovering
+
+abstract type AbstractCovering end
+
 #--- Finite State Machine to do the covering
 
 function state_init! end
