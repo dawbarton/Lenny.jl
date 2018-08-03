@@ -4,6 +4,14 @@ module EmbeddedFunctions
 
 import Base: resize!
 
+#--- Exports
+
+# Exported types
+export StateVar, ZeroFunction, MonitorFunction, ClosedEmbeddedFunctions
+
+# Exported functions
+export rhs!
+
 #--- State variables
 
 struct StateVar{T <: Number}
