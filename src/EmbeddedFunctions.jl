@@ -237,7 +237,28 @@ function getmu(closed::ClosedEmbeddedFunctions{T}; mu=:all) where T <: Number
 end
 
 function setmu!(closed::ClosedEmbeddedFunctions{T}, μ::AbstractVector{T}; mu=:all) where T <: Number
-    # TODO
+    if mu == :all
+        closed.μ .= μ
+    elseif mu == :active
+        i = 1
+        for j = 1:length(closed.μ)
+            if closed.𝕁[j]
+                closed.μ[j] = μ[i]
+                i += 1
+            end
+        end
+    elseif mu == :inactive
+        i = 1
+        for j = 1:length(closed.μ)
+            if !closed.𝕁[j]
+                closed.μ[j] = μ[i]
+                i += 1
+            end
+        end
+    else
+        throw(ArgumentError("Invalid option for mu; valid options are :all, :active, and :inactive"))
+    end
+    μ
 end
 
 function getvars!(v::AbstractVector{T}, closed::ClosedEmbeddedFunctions{T}) where T <: Number
@@ -253,7 +274,7 @@ function getvars!(v::AbstractVector{T}, closed::ClosedEmbeddedFunctions{T}) wher
 end
 
 function getvars(closed::ClosedEmbeddedFunctions{T}) where T <: Number
-    # TODO
+    getvars!(zeros(T, closed.uᵢ[end][end] + sum(closed.𝕁)), closed)
 end
 
 function setvars!(closed::ClosedEmbeddedFunctions{T}, v::AbstractVector{T}) where T <: Number
