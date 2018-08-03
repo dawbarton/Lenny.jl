@@ -71,7 +71,7 @@ This function generates a ClosedEmbeddedFunctions structure from a vector of
 zero functions and a vector of monitor functions. Any state variables referenced
 will be automatically included in the closed problem.
 """
-function ClosedEmbeddedFunctions(Φ::Vector{Z}, Ψ::Vector{M}) where {T <: Number, Z <: ZeroFunction{T}, M <: MonitorFunction{T}}
+function ClosedEmbeddedFunctions(Φ::Vector{<: ZeroFunction{T}}, Ψ::Vector{<: MonitorFunction{T}}) where T <: Number
     # Check for uniqueness
     if !allunique(Φ)
         throw(ArgumentError("Some zero functions are included multiple times"))
