@@ -155,6 +155,7 @@ end
 @generated function rhs!(
         res::AbstractVector{T},
         closed::ClosedEmbeddedFunctions{T, F, FU, G, GU},
+        prob,
         u::AbstractVector{T}
         ) where {T <: Number, F, FU, G, GU}
     body = quote
@@ -174,9 +175,9 @@ end
         # Construct function calls of the form Φ[i](resᵥ[i], uᵥ[Φᵤ[i][1]], ..., uᵥ[Φᵤ[i][n]])
         if length(FU.parameters[i].parameters) == 0
             # No dependencies means pass everything
-            push!(body.args, :(closed.Φ[$i].f(view(res, closed.Φᵢ[$i][1]:closed.Φᵢ[$i][2]), u)))
+            push!(body.args, :(closed.Φ[$i].f(view(res, closed.Φᵢ[$i][1]:closed.Φᵢ[$i][2]), prob, u)))
         else
-            push!(body.args, :(closed.Φ[$i].f(view(res, closed.Φᵢ[$i][1]:closed.Φᵢ[$i][2]), $((:(closed.uᵥ[closed.Φᵤ[$i][$j]]) for j in 1:length(FU.parameters[i].parameters))...))))
+            push!(body.args, :(closed.Φ[$i].f(view(res, closed.Φᵢ[$i][1]:closed.Φᵢ[$i][2]), prob, $((:(closed.uᵥ[closed.Φᵤ[$i][$j]]) for j in 1:length(FU.parameters[i].parameters))...))))
         end
     end
     for i in 1:length(GU.parameters)
@@ -184,9 +185,9 @@ end
         # Uses the return value of Ψ in contrast to Φ since it is assumed to be ℝ rather than ℝⁿ
         if length(GU.parameters[i].parameters) == 0
             # No dependencies means pass everything
-            push!(body.args, :(res[closed.Ψᵢ[$i]] = closed.Ψ[$i].f(u) - closed.μ[$i]))
+            push!(body.args, :(res[closed.Ψᵢ[$i]] = closed.Ψ[$i].f(prob, u) - closed.μ[$i]))
         else
-            push!(body.args, :(res[closed.Ψᵢ[$i]] = closed.Ψ[$i].f($((:(closed.uᵥ[closed.Ψᵤ[$i][$j]]) for j in 1:length(GU.parameters[i].parameters))...)) - closed.μ[$i]))
+            push!(body.args, :(res[closed.Ψᵢ[$i]] = closed.Ψ[$i].f(prob, $((:(closed.uᵥ[closed.Ψᵤ[$i][$j]]) for j in 1:length(GU.parameters[i].parameters))...)) - closed.μ[$i]))
         end
     end
     push!(body.args, :res)
