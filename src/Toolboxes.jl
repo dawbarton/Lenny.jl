@@ -7,6 +7,6 @@ export AbstractToolbox
 
 #--- Base toolbox type
 
-abstract type AbstractToolbox end
+abstract type AbstractToolbox{T <: Number} end
 
 end  # module

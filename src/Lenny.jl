@@ -34,22 +34,24 @@ using .Solvers
 
 #--- Types
 
-struct ContinuationProblem{T <: Number, C <: AbstractCovering, S <: AbstractSolver} <: AbstractContinuationProblem{T}
+mutable struct ContinuationProblem{T <: Number} <: AbstractContinuationProblem{T}
     u::Vector{StateVar{T}}
     Φ::Vector{ZeroFunction{T}}
     Ψ::Vector{MonitorFunction{T}}
     callbacks::CallbackSignals
-    covering::C
-    solver::S
-    toolboxes::Vector{AbstractToolbox}
+    covering::AbstractCovering{T}
+    solver::AbstractSolver{T}
+    toolboxes::Vector{AbstractToolbox{T}}
 end
 
-function ContinuationProblem(; T=Float64, covering=DefaultCovering(), solver=DefaultSolver())
+function ContinuationProblem(T::DataType=Float64)
     u = Vector{StateVar{T}}()
     Φ = Vector{ZeroFunction{T}}()
     Ψ = Vector{MonitorFunction{T}}()
     callbacks = CallbackSignals()
-    toolboxes = Vector{AbstractToolbox}()
+    covering = DefaultCovering(T)
+    solver = DefaultSolver(T)
+    toolboxes = Vector{AbstractToolbox{T}}()
     ContinuationProblem{T}(u, Φ, Ψ, callbacks, covering, solver, toolboxes)
 end
 

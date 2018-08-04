@@ -7,7 +7,7 @@ export AbstractSolver
 
 #--- Base toolbox type
 
-abstract type AbstractSolver end
+abstract type AbstractSolver{T <: Number} end
 
 
 end  # module

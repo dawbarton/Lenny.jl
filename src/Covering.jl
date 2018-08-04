@@ -7,7 +7,7 @@ export AbstractCovering
 
 #--- AbstractCovering
 
-abstract type AbstractCovering end
+abstract type AbstractCovering{T <: Number} end
 
 #--- Finite State Machine to do the covering
 
