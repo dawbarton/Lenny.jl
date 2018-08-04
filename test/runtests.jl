@@ -8,6 +8,6 @@ using Lenny
 
 const L = Lenny
 
-include("test_EmbeddedProblems.jl")
+include("test_EmbeddedFunctions.jl")
 include("test_Callbacks.jl")
 include("test_FSMs.jl")

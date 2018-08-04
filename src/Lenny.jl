@@ -1,9 +1,18 @@
 module Lenny
 
+#--- Dependencies
+
 # maybe look at FastGaussQuadrature.jl
 
-abstract type AbstractClosedProblem{T <: Number} end
+#--- Exports
+
+export StateVar, ZeroFunction, MonitorFunction
+
+#--- Types
+
 abstract type AbstractContinuationProblem{T <: Number} end
+
+#--- Includes
 
 include("EmbeddedFunctions.jl")
 using .EmbeddedFunctions
@@ -22,6 +31,8 @@ using .Toolboxes
 
 include("Solvers.jl")
 using .Solvers
+
+#--- Types
 
 struct ContinuationProblem{T <: Number, C <: AbstractCovering, S <: AbstractSolver} <: AbstractContinuationProblem{T}
     u::Vector{StateVar{T}}

@@ -10,7 +10,8 @@ import Base: resize!
 export StateVar, ZeroFunction, MonitorFunction, ClosedEmbeddedFunctions
 
 # Exported functions
-export rhs!
+export rhs!, getu, getu!, setu!, getmu, getmu!, setmu!, getvars, getvars!,
+    setvars!
 
 #--- State variables
 
@@ -24,9 +25,9 @@ end
 struct ZeroFunction{T <: Number, F}
     f::F  # underlying function
     u::Vector{StateVar{T}}  # underlying state variables
-    m::Base.RefValue{Int}  # number of output values
+    res::Vector{T}  # output vector
 end
-ZeroFunction(f, u, m::Int) = ZeroFunction(f, u, Ref(m))
+ZeroFunction(f, u::Vector{StateVar{T}}, m::Int) where T <: Number = ZeroFunction(f, u, Vector{T}(undef, m))
 
 #--- Monitor functions
 
@@ -141,7 +142,7 @@ function resize!(closed::ClosedEmbeddedFunctions)
     # Zero and monitor functions
     idx = 1
     for i = 1:length(closed.Φ)
-        m = closed.Φ[i].m[]
+        m = length(closed.Φ[i].res)
         closed.Φᵢ[i] = (idx, idx + m - 1)
         idx += m
     end
@@ -239,7 +240,7 @@ function getmu(closed::ClosedEmbeddedFunctions{T}; mu=:all) where T <: Number
     elseif mu == :active
         return getmu!(zeros(T, sum(closed.𝕁)), closed)
     elseif mu == :inactive
-        return getmu!(zeros(T, sum(!closed.𝕁)), closed)
+        return getmu!(zeros(T, sum(.!closed.𝕁)), closed)
     else
         throw(ArgumentError("Invalid option for mu; valid options are :all, :active, and :inactive"))
     end
@@ -256,6 +257,9 @@ function setmu!(closed::ClosedEmbeddedFunctions{T}, μ::AbstractVector{T}; mu=:a
                 i += 1
             end
         end
+        if i != length(μ) + 1
+            throw(DimensionMismatch("μ is the wrong size"))
+        end
     elseif mu == :inactive
         i = 1
         for j = 1:length(closed.μ)
@@ -263,6 +267,9 @@ function setmu!(closed::ClosedEmbeddedFunctions{T}, μ::AbstractVector{T}; mu=:a
                 closed.μ[j] = μ[i]
                 i += 1
             end
+        end
+        if i != length(μ) + 1
+            throw(DimensionMismatch("μ is the wrong size"))
         end
     else
         throw(ArgumentError("Invalid option for mu; valid options are :all, :active, and :inactive"))
