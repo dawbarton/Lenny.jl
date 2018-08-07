@@ -1,4 +1,4 @@
-module Covering
+module Coverings
 
 #--- Dependencies
 
@@ -20,9 +20,12 @@ close!(prob, covering::AbstractCovering) = covering
 
 #--- Default covering type
 
-struct DefaultCovering{T <: Number} <: AbstractCovering{T} end
+mutable struct CoveringOptions{T <: Number} <: AbstractCovering{T}
+    dim::Int
+    # other parameters
+end
 
-DefaultCovering(T::DataType) = DefaultCovering{T}()
+DefaultCovering(T::DataType) = CoveringOptions{T}()
 
 #--- Finite State Machine to do the covering
 

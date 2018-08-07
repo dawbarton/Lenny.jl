@@ -29,8 +29,8 @@ using .Callbacks
 include("FSMs.jl")
 using .FSMs
 
-include("Covering.jl")
-using .Covering
+include("Coverings.jl")
+using .Coverings
 
 include("Toolboxes.jl")
 using .Toolboxes
