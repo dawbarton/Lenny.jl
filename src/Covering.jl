@@ -1,13 +1,28 @@
 module Covering
 
+#--- Dependencies
+
+import ..Lenny: close!
+
 #--- Exports
 
 # Exported types
-export AbstractCovering
+export AbstractCovering, Covering
 
-#--- AbstractCovering
+# Exported functions
+export DefaultCovering
+
+#--- Base covering type
 
 abstract type AbstractCovering{T <: Number} end
+
+close!(prob, covering::AbstractCovering) = covering
+
+#--- Default covering type
+
+struct DefaultCovering{T <: Number} <: AbstractCovering{T} end
+
+DefaultCovering(T::DataType) = DefaultCovering{T}()
 
 #--- Finite State Machine to do the covering
 
