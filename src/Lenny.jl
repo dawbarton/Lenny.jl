@@ -109,7 +109,7 @@ function close!(prob::ContinuationProblem{T}) where T
     emitsignal(prob.callbacks, "before_close_embedding", prob)
     embedded = ClosedEmbeddedFunctions(prob.Φ, prob.Ψ)
     emitsignal(prob.callbacks, "after_close_embedding", prob)
-    newprob = ClosedContinuationProblem(closed.u, prob.Φ, prob.Ψ, prob.callbacks, embedded, prob.covering, prob.nlsolver, prob.linsolver, prob.toolboxes)
+    newprob = ClosedContinuationProblem(embedded.u, prob.Φ, prob.Ψ, prob.callbacks, embedded, prob.covering, prob.nlsolver, prob.linsolver, prob.toolboxes)
     emitsignal(prob.callbacks, "after_close_continuationproblem", newprob)
     newprob
 end
