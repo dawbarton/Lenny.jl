@@ -20,18 +20,9 @@ z1 = ZeroFunction(circle!, [x, y], 1)
 z2 = ZeroFunction(plane!, [x, z], 1)
 m1 = MonitorFunction(hyper!, [x, z], "hyper", true)
 
-cl = EmbeddedFunctions.ClosedEmbeddedFunctions([z1, z2], [m1])
-
-u = zeros(4)  # includes continuation parameters (μ)
-EmbeddedFunctions.pullu!(u, cl)  # doesn't include continuation parameters *at the moment*
-
-res = zeros(3)
-EmbeddedFunctions.rhs!(res, cl, u)
-
-#---
 prob = ContinuationProblem()
-push!(prob.Φ, z1)
-push!(prob.Φ, z2)
-push!(prob.Ψ, m1)
+for a in [z1, z2, m1]
+    add!(prob, a)
+end
 
 prob1 = Lenny.close!(prob)

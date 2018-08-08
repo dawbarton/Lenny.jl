@@ -3,6 +3,7 @@ module Coverings
 #--- Dependencies
 
 import ..Lenny: close!
+using ..Lenny: add!, AbstractContinuationProblem, ZeroFunction, StateVar
 
 #--- Exports
 
@@ -33,15 +34,17 @@ end
 
 #--- Curves
 
-struct Curve{T}
+mutable struct Curve{T}
     charts::Vector{Chart{T}}
+    currentchart::Chart{T}
     status  # TODO: make concrete
 end
 
 function Curve(T::DataType)
     charts = Chart{T}[]
+    currentchart = Chart(T)
     status = 0
-    Curve(charts, status)
+    Curve(charts, currentchart, status)
 end
 
 #--- Atlases
@@ -82,7 +85,26 @@ end
 
 DefaultCovering(T::DataType) = Covering(T)
 
-close!(prob, covering::Covering) = covering
+function close!(prob, covering::Covering{T}) where T
+    # Add the projection condition as a closure
+    add!(prob, ZeroFunction((res, prob, u) -> projectioncondition!(res, prob, u, covering), StateVar{T}[], 1))
+    # Return the covering as-is
+    covering
+end
+
+function projectioncondition!(
+        res::AbstractVector{T},
+        prob::AbstractContinuationProblem{T},
+        u::AbstractVector{T},
+        covering::Covering{T}
+        ) where T
+    pr = zero(T)
+    chart = covering.currentcurve.currentchart
+    for i = 1:length(u)
+        pr += chart.t[i]*(u[i] - chart.u[i])
+    end
+    res[1] = pr
+end
 
 #--- Finite State Machine to do the covering
 

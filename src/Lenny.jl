@@ -8,7 +8,11 @@ module Lenny
 
 #--- Exports
 
+# Exported types
 export StateVar, ZeroFunction, MonitorFunction, ContinuationProblem
+
+# Exported functions
+export add!
 
 #--- Types
 
@@ -17,6 +21,7 @@ abstract type AbstractContinuationProblem{T <: Number} end
 #--- Forward definitions
 
 function close! end
+function add! end
 
 #--- Includes
 
@@ -70,6 +75,18 @@ function ContinuationProblem(T::DataType=Float64)
     end
     # Construct
     ContinuationProblem{T}(Φ, Ψ, callbacks, opts, covering, nlsolver, linsolver, toolboxes)
+end
+
+#--- Helper functions
+
+function add!(prob::ContinuationProblem{T}, ϕ::ZeroFunction{T}) where T
+    push!(prob.Φ, ϕ)
+    nothing
+end
+
+function add!(prob::ContinuationProblem{T}, ψ::MonitorFunction{T}) where T
+    push!(prob.Ψ, ψ)
+    nothing
 end
 
 #--- Specialised/closed continuation problem
