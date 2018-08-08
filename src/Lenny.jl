@@ -44,8 +44,10 @@ mutable struct ContinuationProblem{T <: Number} <: AbstractContinuationProblem{T
     Φ::Vector{ZeroFunction{T}}
     Ψ::Vector{MonitorFunction{T}}
     callbacks::CallbackSignals
-    covering::AbstractCovering{T}
-    solver::AbstractSolver{T}
+    opts::Dict{String, Any}
+    covering::Union{Missing, AbstractCovering{T}}
+    nlsolver::Union{Missing, AbstractNLSolver{T}}
+    linsolver::Union{Missing, AbstractLinSolver{T}}
     toolboxes::Vector{AbstractToolbox{T}}
 end
 
@@ -56,16 +58,18 @@ function ContinuationProblem(T::DataType=Float64)
     Φ = Vector{ZeroFunction{T}}()
     Ψ = Vector{MonitorFunction{T}}()
     callbacks = CallbackSignals()
-    covering = DefaultCovering(T)
-    solver = DefaultSolver(T)
+    opts = Dict{String, Any}()
+    covering = missing
+    nlsolver = missing
+    linsolver = missing
     toolboxes = Vector{AbstractToolbox{T}}()
     # Callbacks
-    for signal in ["close_continuationproblem", "close_solver", "close_covering", "close_embedding"]
+    for signal in ["close_continuationproblem", "close_nlsolver", "close_linsolver", "close_covering", "close_embedding"]
         addsignal!(callbacks, "before_"*signal)
         addsignal!(callbacks, "after_"*signal)
     end
     # Construct
-    ContinuationProblem{T}(Φ, Ψ, callbacks, covering, solver, toolboxes)
+    ContinuationProblem{T}(Φ, Ψ, callbacks, opts, covering, nlsolver, linsolver, toolboxes)
 end
 
 #--- Specialised/closed continuation problem
@@ -73,14 +77,16 @@ end
 struct ClosedContinuationProblem{T <: Number,
         F <: ClosedEmbeddedFunctions{T},
         C <: AbstractCovering{T},
-        S <: AbstractSolver{T}} <: AbstractContinuationProblem{T}
+        NLS <: AbstractNLSolver{T},
+        LS <: AbstractLinSolver{T}} <: AbstractContinuationProblem{T}
     u::Vector{StateVar{T}}
     Φ::Vector{ZeroFunction{T}}
     Ψ::Vector{MonitorFunction{T}}
     callbacks::CallbackSignals
-    closed::F
+    embedded::F
     covering::C
-    solver::S
+    nlsolver::NLS
+    linsolver::LS
     toolboxes::Vector{AbstractToolbox{T}}
 end
 
@@ -91,16 +97,19 @@ function close!(prob::ContinuationProblem{T}) where T
     for i = 1:length(prob.toolboxes)
        prob.toolboxes[i] = close!(prob, prob.toolboxes[i])
     end
-    emitsignal(prob.callbacks, "before_close_solver", prob)
-    prob.solver = close!(prob, prob.solver)
-    emitsignal(prob.callbacks, "after_close_solver", prob)
+    emitsignal(prob.callbacks, "before_close_linsolver", prob)
+    prob.linsolver = close!(prob, ismissing(prob.linsolver) ? DefaultLinSolver(T) : prob.linsolver)
+    emitsignal(prob.callbacks, "after_close_linsolver", prob)
+    emitsignal(prob.callbacks, "before_close_nlsolver", prob)
+    prob.nlsolver = close!(prob, ismissing(prob.nlsolver) ? DefaultNLSolver(T) : prob.nlsolver)
+    emitsignal(prob.callbacks, "after_close_nlsolver", prob)
     emitsignal(prob.callbacks, "before_close_covering", prob)
-    prob.covering = close!(prob, prob.covering)
+    prob.covering = close!(prob, ismissing(prob.covering) ? DefaultCovering(T) : prob.covering)
     emitsignal(prob.callbacks, "after_close_covering", prob)
     emitsignal(prob.callbacks, "before_close_embedding", prob)
-    closed = ClosedEmbeddedFunctions(prob.Φ, prob.Ψ)
+    embedded = ClosedEmbeddedFunctions(prob.Φ, prob.Ψ)
     emitsignal(prob.callbacks, "after_close_embedding", prob)
-    newprob = ClosedContinuationProblem(closed.u, prob.Φ, prob.Ψ, prob.callbacks, closed, prob.covering, prob.solver, prob.toolboxes)
+    newprob = ClosedContinuationProblem(closed.u, prob.Φ, prob.Ψ, prob.callbacks, embedded, prob.covering, prob.nlsolver, prob.linsolver, prob.toolboxes)
     emitsignal(prob.callbacks, "after_close_continuationproblem", newprob)
     newprob
 end

@@ -7,21 +7,29 @@ import ..Lenny: close!
 #--- Exports
 
 # Exported types
-export AbstractSolver, NLsolve
+export AbstractSolver, AbstractNLSolver, NLsolve, AbstractLinSolver, LinSolve
 
 # Exported functions
-export DefaultSolver
+export DefaultNLSolver, DefaultLinSolver
 
-#--- Base solver type
+#--- Base solver types
 
 abstract type AbstractSolver{T <: Number} end
+abstract type AbstractNLSolver{T <: Number} <: AbstractSolver{T} end
+abstract type AbstractLinSolver{T <: Number} <: AbstractSolver{T} end
 
 close!(prob, solver::AbstractSolver) = solver
 
-#--- Integrated solvers
+#--- Integrated nonlinear solvers
 
-struct NLsolve{T <: Number} <: AbstractSolver{T} end
+struct NLSolve{T <: Number} <: AbstractNLSolver{T} end
 
-DefaultSolver(T::DataType) = NLsolve{T}()
+DefaultNLSolver(T::DataType) = NLSolve{T}()
+
+#--- Integrated linear solvers
+
+struct LinSolver{T <: Number} <: AbstractLinSolver{T} end
+
+DefaultLinSolver(T::DataType) = LinSolver{T}()
 
 end  # module
