@@ -271,7 +271,7 @@ function getu!(u::AbstractVector{T}, closed::ClosedEmbeddedFunctions{T}) where T
     end
     u
 end
-getu(closed::ClosedEmbeddedFunctions{T}) where {T <: Number} = getu!(zeros(T, lengthu(closed)), closed)
+getu(closed::ClosedEmbeddedFunctions{T}) where {T <: Number} = getu!(zeros(T, dim_u(closed)), closed)
 
 function setu!(closed::ClosedEmbeddedFunctions{T}, u::AbstractVector{T}) where T <: Number
     for i = 1:length(closed.u)
