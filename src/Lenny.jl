@@ -112,7 +112,7 @@ end
 function close!(prob::ContinuationProblem{T}) where T
     # All callbacks should be added by this point
     emitsignal(prob.callbacks, "before_close_continuationproblem", prob)
-    for i = 1:length(prob.toolboxes)
+    for i = eachindex(prob.toolboxes)
        prob.toolboxes[i] = close!(prob, prob.toolboxes[i])
     end
     emitsignal(prob.callbacks, "before_close_linsolver", prob)

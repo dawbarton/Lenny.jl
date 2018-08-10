@@ -99,7 +99,7 @@ function ClosedEmbeddedFunctions(Φ::Vector{<: ZeroFunction{T}}, Ψ::Vector{<: M
     Ψᵤ = []  # a vector of tuples of different lengths so needs to be Any
     𝕁 = Bool[]
     μₛ = Dict{String, Int}()
-    for i = 1:length(Ψ)
+    for i = eachindex(Ψ)
         ψ = Ψ[i]
         ψᵤ = Int[]
         for uu in ψ.u
@@ -130,13 +130,13 @@ underlying state variables and the dimensions of the zero functions.
 function resize!(closed::ClosedEmbeddedFunctions)
     # State variables
     idx = 1
-    for i = 1:length(closed.u)
+    for i = eachindex(closed.u)
         n = length(closed.u[i].u)
         closed.uᵢ[i] = (idx, idx + n - 1)
         idx += n
     end
     # Continuation parameters
-    for i = 1:length(closed.μ)
+    for i = eachindex(closed.μ)
         if closed.𝕁[i]
             closed.μᵢ[i] = idx
             idx += 1
@@ -146,12 +146,12 @@ function resize!(closed::ClosedEmbeddedFunctions)
     end
     # Zero and monitor functions
     idx = 1
-    for i = 1:length(closed.Φ)
+    for i = eachindex(closed.Φ)
         m = length(closed.Φ[i].res)
         closed.Φᵢ[i] = (idx, idx + m - 1)
         idx += m
     end
-    for i = 1:length(closed.Ψ)
+    for i = eachindex(closed.Ψ)
         closed.Ψᵢ[i] = idx
         idx += 1
     end
@@ -166,34 +166,34 @@ end
         ) where {T <: Number, F, FU, G, GU}
     body = quote
         # Views on the state variables get reused, so precompute them
-        for i = 1:length(closed.uᵢ)
+        for i = eachindex(closed.uᵢ)
             (i0, i1) = closed.uᵢ[i]
             closed.uᵥ[i] = view(u, i0:i1)
         end
         # Copy any active continuation parameter values into the μ variable
-        for i = 1:length(closed.μ)
+        for i = eachindex(closed.μ)
             if closed.𝕁[i]
                 closed.μ[i] = u[closed.μᵢ[i]]
             end
         end
     end
-    for i in 1:length(FU.parameters)
+    for i in eachindex(FU.parameters)
         # Construct function calls of the form Φ[i](resᵥ[i], uᵥ[Φᵤ[i][1]], ..., uᵥ[Φᵤ[i][n]])
         if length(FU.parameters[i].parameters) == 0
             # No dependencies means pass everything
             push!(body.args, :(closed.Φ[$i].f(view(res, closed.Φᵢ[$i][1]:closed.Φᵢ[$i][2]), prob, u)))
         else
-            push!(body.args, :(closed.Φ[$i].f(view(res, closed.Φᵢ[$i][1]:closed.Φᵢ[$i][2]), prob, $((:(closed.uᵥ[closed.Φᵤ[$i][$j]]) for j in 1:length(FU.parameters[i].parameters))...))))
+            push!(body.args, :(closed.Φ[$i].f(view(res, closed.Φᵢ[$i][1]:closed.Φᵢ[$i][2]), prob, $((:(closed.uᵥ[closed.Φᵤ[$i][$j]]) for j in eachindex(FU.parameters[i].parameters))...))))
         end
     end
-    for i in 1:length(GU.parameters)
+    for i in eachindex(GU.parameters)
         # Construct function calls of the form res[Ψᵢ[i]] = Ψ[i](uᵥ[Ψᵤ[i][1]], ..., uᵥ[Ψᵤ[i][n]]) - μ[i]
         # Uses the return value of Ψ in contrast to Φ since it is assumed to be ℝ rather than ℝⁿ
         if length(GU.parameters[i].parameters) == 0
             # No dependencies means pass everything
             push!(body.args, :(res[closed.Ψᵢ[$i]] = closed.Ψ[$i].f(prob, u) - closed.μ[$i]))
         else
-            push!(body.args, :(res[closed.Ψᵢ[$i]] = closed.Ψ[$i].f(prob, $((:(closed.uᵥ[closed.Ψᵤ[$i][$j]]) for j in 1:length(GU.parameters[i].parameters))...)) - closed.μ[$i]))
+            push!(body.args, :(res[closed.Ψᵢ[$i]] = closed.Ψ[$i].f(prob, $((:(closed.uᵥ[closed.Ψᵤ[$i][$j]]) for j in eachindex(GU.parameters[i].parameters))...)) - closed.μ[$i]))
         end
     end
     push!(body.args, :res)
@@ -266,7 +266,7 @@ Return the number of output dimensions of the set of monitor functions.
 dim_psi(closed::ClosedEmbeddedFunctions) = length(closed.Ψ)
 
 function getu!(u::AbstractVector{T}, closed::ClosedEmbeddedFunctions{T}) where T <: Number
-    for i = 1:length(closed.u)
+    for i = eachindex(closed.u)
         u[closed.uᵢ[i][1]:closed.uᵢ[i][2]] .= closed.u[i].u
     end
     u
@@ -274,7 +274,7 @@ end
 getu(closed::ClosedEmbeddedFunctions{T}) where {T <: Number} = getu!(zeros(T, dim_u(closed)), closed)
 
 function setu!(closed::ClosedEmbeddedFunctions{T}, u::AbstractVector{T}) where T <: Number
-    for i = 1:length(closed.u)
+    for i = eachindex(closed.u)
         closed.u[i].u .= u[closed.uᵢ[i][1]:closed.uᵢ[i][2]]
     end
 end
@@ -284,7 +284,7 @@ function getmu!(μ::AbstractVector{T}, closed::ClosedEmbeddedFunctions{T}; mu=:a
         μ .= closed.μ
     elseif mu == :active
         i = 1
-        for j = 1:length(closed.μ)
+        for j = eachindex(closed.μ)
             if closed.𝕁[j]
                 μ[i] = closed.μ[j]
                 i += 1
@@ -292,7 +292,7 @@ function getmu!(μ::AbstractVector{T}, closed::ClosedEmbeddedFunctions{T}; mu=:a
         end
     elseif mu == :inactive
         i = 1
-        for j = 1:length(closed.μ)
+        for j = eachindex(closed.μ)
             if !closed.𝕁[j]
                 μ[i] = closed.μ[j]
                 i += 1
@@ -321,7 +321,7 @@ function setmu!(closed::ClosedEmbeddedFunctions{T}, μ::AbstractVector{T}; mu=:a
         closed.μ .= μ
     elseif mu == :active
         i = 1
-        for j = 1:length(closed.μ)
+        for j = eachindex(closed.μ)
             if closed.𝕁[j]
                 closed.μ[j] = μ[i]
                 i += 1
@@ -332,7 +332,7 @@ function setmu!(closed::ClosedEmbeddedFunctions{T}, μ::AbstractVector{T}; mu=:a
         end
     elseif mu == :inactive
         i = 1
-        for j = 1:length(closed.μ)
+        for j = eachindex(closed.μ)
             if !closed.𝕁[j]
                 closed.μ[j] = μ[i]
                 i += 1
@@ -348,10 +348,10 @@ function setmu!(closed::ClosedEmbeddedFunctions{T}, μ::AbstractVector{T}; mu=:a
 end
 
 function getvars!(v::AbstractVector{T}, closed::ClosedEmbeddedFunctions{T}) where T <: Number
-    for i = 1:length(closed.u)
+    for i = eachindex(closed.u)
         v[closed.uᵢ[i][1]:closed.uᵢ[i][2]] .= closed.u[i].u
     end
-    for i = 1:length(closed.μ)
+    for i = eachindex(closed.μ)
         if closed.𝕁[i]
             v[closed.μᵢ[i]] = closed.μ[i]
         end
@@ -364,10 +364,10 @@ function getvars(closed::ClosedEmbeddedFunctions{T}) where T <: Number
 end
 
 function setvars!(closed::ClosedEmbeddedFunctions{T}, v::AbstractVector{T}) where T <: Number
-    for i = 1:length(closed.u)
+    for i = eachindex(closed.u)
         closed.u[i].u .= v[closed.uᵢ[i][1]:closed.uᵢ[i][2]]
     end
-    for i = 1:length(closed.μ)
+    for i = eachindex(closed.μ)
         if closed.𝕁[i]
             closed.μ[i] = v[closed.μᵢ[i]]
         end

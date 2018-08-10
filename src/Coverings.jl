@@ -130,7 +130,7 @@ function projectioncondition!(
         ) where T
     pr = zero(T)
     chart = covering.currentcurve.currentchart
-    for i = 1:length(u)
+    for i = eachindex(u)
         pr += chart.t[i]*(u[i] - chart.u[i])
     end
     res[1] = pr
