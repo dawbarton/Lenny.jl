@@ -11,7 +11,8 @@ export StateVar, ZeroFunction, MonitorFunction, ClosedEmbeddedFunctions
 
 # Exported functions
 export rhs!, getu, getu!, setu!, getmu, getmu!, setmu!, getvars, getvars!,
-    setvars!
+    setvars!, muidx, active, active!, dim_u, dim_mu, dim_phi, dim_psi,
+    mu_idx, mu_name
 
 #--- State variables
 
@@ -27,14 +28,14 @@ struct ZeroFunction{T <: Number, F}
     u::Vector{StateVar{T}}  # underlying state variables
     res::Vector{T}  # output vector
 end
-ZeroFunction(f, u::Vector{StateVar{T}}, m::Int) where T <: Number = ZeroFunction(f, u, Vector{T}(undef, m))
+ZeroFunction(f, u::Vector{StateVar{T}}, m::Integer) where T <: Number = ZeroFunction(f, u, Vector{T}(undef, m))
 
 #--- Monitor functions
 
 struct MonitorFunction{T <: Number, F}
     f::F  #underlying function
     u::Vector{StateVar{T}}  # underlying state variables
-    μ::String  # name of the continuation parameter
+    μ_name::String  # name of the continuation parameter
     active::Bool  # whether the continuation parameter is active initially
 end
 
@@ -55,6 +56,7 @@ struct ClosedEmbeddedFunctions{T <: Number,
     Φᵢ::Vector{Tuple{Int, Int}}
     μ::Vector{T}
     μᵢ::Vector{Int}
+    μₛ::Dict{String, Int}
     𝕁::Vector{Bool}  # 𝕁 denotes active continuation parameters (i.e., continuation parameters that vary)
     Ψ::G
     Ψᵤ::GU
@@ -96,7 +98,9 @@ function ClosedEmbeddedFunctions(Φ::Vector{<: ZeroFunction{T}}, Ψ::Vector{<: M
     Φᵢ = Vector{Tuple{Int, Int}}(undef, length(Φ))
     Ψᵤ = []  # a vector of tuples of different lengths so needs to be Any
     𝕁 = Bool[]
-    for ψ in Ψ
+    μₛ = Dict{String, Int}()
+    for i = 1:length(Ψ)
+        ψ = Ψ[i]
         ψᵤ = Int[]
         for uu in ψ.u
             if !(uu in u)
@@ -106,13 +110,14 @@ function ClosedEmbeddedFunctions(Φ::Vector{<: ZeroFunction{T}}, Ψ::Vector{<: M
         end
         push!(𝕁, ψ.active)
         push!(Ψᵤ, (ψᵤ...,))
+        push!(μₛ, ψ.μ_name => i)
     end
     Ψᵢ = Vector{Int}(undef, length(Ψ))
     uᵢ = Vector{Tuple{Int, Int}}(undef, length(u))
     uᵥ = Vector{SimpleView{T}}(undef, length(u))
     μ = Vector{T}(undef, length(Ψ))
     μᵢ = Vector{Int}(undef, length(μ))
-    closed = ClosedEmbeddedFunctions(u, uᵢ, uᵥ, (Φ...,), (Φᵤ...,), Φᵢ, μ, μᵢ, 𝕁, (Ψ...,), (Ψᵤ...,), Ψᵢ)
+    closed = ClosedEmbeddedFunctions(u, uᵢ, uᵥ, (Φ...,), (Φᵤ...,), Φᵢ, μ, μᵢ, μₛ, 𝕁, (Ψ...,), (Ψᵤ...,), Ψᵢ)
     resize!(closed)
 end
 
@@ -195,13 +200,78 @@ end
     body
 end
 
+"""
+    mu_idx(closed::ClosedEmbeddedFunctions, μ::String)
+
+Return the index in the continuation parameter vector of the specified
+continuation parameter `μ`.
+"""
+mu_idx(closed::ClosedEmbeddedFunctions, μ::String) = closed.μₛ[μ]
+mu_idx(closed::ClosedEmbeddedFunctions, μ::Integer) = μ
+
+"""
+    mu_name(closed::ClosedEmbeddedFunctions, μ::Integer)
+
+Return the name of the specified continuation parameter `μ`.
+"""
+mu_name(closed::ClosedEmbeddedFunctions, μ::Integer) = closed.Ψ[μ].μ_name
+
+"""
+    active(closed::ClosedEmbeddedFunctions)
+
+Return the number of active continuation parameters.
+"""
+active(closed::ClosedEmbeddedFunctions) = sum(closed.𝕁)
+
+"""
+    active(closed::ClosedEmbeddedFunctions, μ)
+
+Return whether the specified continuation parameter `μ` is active or not.
+"""
+active(closed::ClosedEmbeddedFunctions, μ) = closed.𝕁[muidx(closed, μ)]
+
+"""
+    active!(closed::ClosedEmbeddedFunctions, μ, active::Bool)
+
+Set the specified continuation parameter `μ` to be active or not.
+"""
+active!(closed::ClosedEmbeddedFunctions, μ, active::Bool) = (closed.𝕁[muidx(closed, μ)] = active)
+
+"""
+    dim_u(closed::ClosedEmbeddedFunctions)
+
+Return the total number of state variables.
+"""
+dim_u(closed::ClosedEmbeddedFunctions) = closed.uᵢ[end][end]
+
+"""
+    dim_mu(closed::ClosedEmbeddedFunctions)
+
+Return the total number of continuation parameters.
+"""
+dim_mu(closed::ClosedEmbeddedFunctions) = length(closed.μ)
+
+"""
+    dim_phi(closed::ClosedEmbeddedFunctions)
+
+Return the number of output dimensions of the set of zero functions.
+"""
+dim_phi(closed::ClosedEmbeddedFunctions) = closed.Φᵢ[end][end]
+
+"""
+    dim_psi(closed::ClosedEmbeddedFunctions)
+
+Return the number of output dimensions of the set of monitor functions.
+"""
+dim_psi(closed::ClosedEmbeddedFunctions) = length(closed.Ψ)
+
 function getu!(u::AbstractVector{T}, closed::ClosedEmbeddedFunctions{T}) where T <: Number
     for i = 1:length(closed.u)
         u[closed.uᵢ[i][1]:closed.uᵢ[i][2]] .= closed.u[i].u
     end
     u
 end
-getu(closed::ClosedEmbeddedFunctions{T}) where {T <: Number} = getu!(zeros(T, closed.uᵢ[end][end]), closed)
+getu(closed::ClosedEmbeddedFunctions{T}) where {T <: Number} = getu!(zeros(T, lengthu(closed)), closed)
 
 function setu!(closed::ClosedEmbeddedFunctions{T}, u::AbstractVector{T}) where T <: Number
     for i = 1:length(closed.u)

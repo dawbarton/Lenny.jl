@@ -13,6 +13,6 @@ export AbstractToolbox
 
 abstract type AbstractToolbox{T <: Number} end
 
-close!(prob, toolbox::AbstractToolbox) = toolbox
+close!(prob, toolbox::AbstractToolbox) = nothing
 
 end  # module

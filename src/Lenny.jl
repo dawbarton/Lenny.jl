@@ -54,6 +54,7 @@ mutable struct ContinuationProblem{T <: Number} <: AbstractContinuationProblem{T
     nlsolver::Union{Missing, AbstractNLSolver{T}}
     linsolver::Union{Missing, AbstractLinSolver{T}}
     toolboxes::Vector{AbstractToolbox{T}}
+    μ_range::Vector{Pair{String, Tuple{T, T}}}
 end
 
 function ContinuationProblem(T::DataType=Float64)
@@ -68,13 +69,14 @@ function ContinuationProblem(T::DataType=Float64)
     nlsolver = missing
     linsolver = missing
     toolboxes = Vector{AbstractToolbox{T}}()
+    μ_range = Vector{Pair{String, Tuple{T, T}}}()
     # Callbacks
-    for signal in ["close_continuationproblem", "close_nlsolver", "close_linsolver", "close_covering", "close_embedding"]
+    for signal in ["close_continuationproblem", "close_nlsolver", "close_linsolver", "close_covering"]
         addsignal!(callbacks, "before_"*signal)
         addsignal!(callbacks, "after_"*signal)
     end
     # Construct
-    ContinuationProblem{T}(Φ, Ψ, callbacks, opts, covering, nlsolver, linsolver, toolboxes)
+    ContinuationProblem{T}(Φ, Ψ, callbacks, opts, covering, nlsolver, linsolver, toolboxes, μ_range)
 end
 
 #--- Helper functions
@@ -92,44 +94,62 @@ end
 #--- Specialised/closed continuation problem
 
 struct ClosedContinuationProblem{T <: Number,
-        F <: ClosedEmbeddedFunctions{T},
         C <: AbstractCovering{T},
         NLS <: AbstractNLSolver{T},
         LS <: AbstractLinSolver{T}} <: AbstractContinuationProblem{T}
-    u::Vector{StateVar{T}}
     Φ::Vector{ZeroFunction{T}}
     Ψ::Vector{MonitorFunction{T}}
     callbacks::CallbackSignals
-    embedded::F
     covering::C
     nlsolver::NLS
     linsolver::LS
     toolboxes::Vector{AbstractToolbox{T}}
+    μ_range::Vector{Pair{Int, Tuple{T, T}}}
 end
 
 #--- Close a continuation problem
 
 function close!(prob::ContinuationProblem{T}) where T
+    # All callbacks should be added by this point
     emitsignal(prob.callbacks, "before_close_continuationproblem", prob)
     for i = 1:length(prob.toolboxes)
        prob.toolboxes[i] = close!(prob, prob.toolboxes[i])
     end
     emitsignal(prob.callbacks, "before_close_linsolver", prob)
-    prob.linsolver = close!(prob, ismissing(prob.linsolver) ? DefaultLinSolver(T) : prob.linsolver)
+    if ismissing(prob.linsolver)
+        prob.linsolver = DefaultLinSolver(T)
+    end
+    close!(prob, prob.linsolver)
     emitsignal(prob.callbacks, "after_close_linsolver", prob)
     emitsignal(prob.callbacks, "before_close_nlsolver", prob)
-    prob.nlsolver = close!(prob, ismissing(prob.nlsolver) ? DefaultNLSolver(T) : prob.nlsolver)
+    if ismissing(prob.nlsolver)
+        prob.nlsolver = DefaultNLSolver(T)
+    end
+    close!(prob, prob.nlsolver)
     emitsignal(prob.callbacks, "after_close_nlsolver", prob)
     emitsignal(prob.callbacks, "before_close_covering", prob)
-    prob.covering = close!(prob, ismissing(prob.covering) ? DefaultCovering(T) : prob.covering)
+    if ismissing(prob.covering)
+        prob.covering = DefaultCovering(T)
+    end
+    close!(prob, prob.covering)
     emitsignal(prob.callbacks, "after_close_covering", prob)
-    emitsignal(prob.callbacks, "before_close_embedding", prob)
-    embedded = ClosedEmbeddedFunctions(prob.Φ, prob.Ψ)
-    emitsignal(prob.callbacks, "after_close_embedding", prob)
-    newprob = ClosedContinuationProblem(embedded.u, prob.Φ, prob.Ψ, prob.callbacks, embedded, prob.covering, prob.nlsolver, prob.linsolver, prob.toolboxes)
+    μ_range = Vector{Pair{Int, Tuple{T, T}}}()
+    for (μ, range) in prob.μ_range
+        push!(μ_range, mu_idx(prob.covering, μ) => range)
+    end
+    newprob = ClosedContinuationProblem(prob.Φ, prob.Ψ, prob.callbacks,
+        prob.covering, prob.nlsolver, prob.linsolver, prob.toolboxes, μ_range)
     emitsignal(prob.callbacks, "after_close_continuationproblem", newprob)
     newprob
 end
 
+function continuation!(prob0::ContinuationProblem{T}, μ::Vector{Pair{String, Tuple{T, T}}}) where T
+    append!(prob0.μ_range, μ)
+    continuation!(prob0)
+end
+
+function continuation!(prob0::ContinuationProblem)
+    prob = close!(prob0)
+end
 
 end # module

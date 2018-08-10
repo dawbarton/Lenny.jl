@@ -18,7 +18,7 @@ abstract type AbstractSolver{T <: Number} end
 abstract type AbstractNLSolver{T <: Number} <: AbstractSolver{T} end
 abstract type AbstractLinSolver{T <: Number} <: AbstractSolver{T} end
 
-close!(prob, solver::AbstractSolver) = solver
+close!(prob, solver::AbstractSolver) = nothing
 
 #--- Integrated nonlinear solvers
 

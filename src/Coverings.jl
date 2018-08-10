@@ -4,6 +4,9 @@ module Coverings
 
 import ..Lenny: close!
 using ..Lenny: add!, AbstractContinuationProblem, ZeroFunction, StateVar
+using ..EmbeddedFunctions: ClosedEmbeddedFunctions, dim_u, dim_mu, dim_phi,
+    dim_psi, active, active!
+import ..EmbeddedFunctions: mu_idx
 
 #--- Exports
 
@@ -58,7 +61,7 @@ function Atlas(T::DataType)
     Atlas(charts)
 end
 
-#--- Default covering types
+#--- Covering options
 
 struct CoveringOptions{T <: Number}
     dim::Int
@@ -70,26 +73,53 @@ function CoveringOptions(T::DataType)
     CoveringOptions{T}(dim)
 end
 
-struct Covering{T <: Number} <: AbstractCovering{T}
+#--- Covering type
+
+struct Covering{T <: Number, E} <: AbstractCovering{T}
     opts::CoveringOptions{T}
+    efuncs::E
     currentcurve::Curve{T}
     atlas::Atlas{T}
 end
 
 function Covering(T::DataType)
     opts = CoveringOptions(T)
+    efuncs = nothing
     currentcurve = Curve(T)
     atlas = Atlas(T)
-    Covering(opts, currentcurve, atlas)
+    Covering(opts, efuncs, currentcurve, atlas)
+end
+
+function Covering(covering::Covering{T}, efuncs::ClosedEmbeddedFunctions{T}) where T
+    Covering(covering.opts, efuncs, covering.currentcurve, covering.atlas)
 end
 
 DefaultCovering(T::DataType) = Covering(T)
 
+# Some forwards
+mu_idx(covering::Covering, μ) = mu_idx(covering.efuncs, μ)
+mu_name(covering::Covering, μ) = mu_name(covering.efuncs, μ)
+
+#--- Close the covering
+
 function close!(prob, covering::Covering{T}) where T
+    # TODO: this is hard coded to a 1D covering... need to work out the separation between covering and atlas construction
     # Add the projection condition as a closure
     add!(prob, ZeroFunction((res, prob, u) -> projectioncondition!(res, prob, u, covering), StateVar{T}[], 1))
-    # Return the covering as-is
-    covering
+    # Close the efuncs functions
+    efuncs = ClosedEmbeddedFunctions(prob.Φ, prob.Ψ)
+    # Make the initial continuation variables active
+    for (μ, range) in prob.μ_range
+        active!(efuncs, μ, true)
+    end
+    totalvars = dim_u(efuncs) + active(efuncs)
+    totalfuncs = dim_phi(efuncs) + dim_psi(efuncs)
+    # Check the dimensionality of the problem
+    if totalvars != totalfuncs
+        throw(DimensionMismatch("Dimensionality mismatch between the number of equations ($totalfuncs) and the number of unknowns ($totalvars)"))
+    end
+    # Return the covering with efuncs
+    prob.covering = Covering(covering, efuncs)
 end
 
 function projectioncondition!(
