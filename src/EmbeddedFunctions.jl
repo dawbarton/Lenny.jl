@@ -10,16 +10,18 @@ import Base: resize!
 export StateVar, ZeroFunction, MonitorFunction, ClosedEmbeddedFunctions
 
 # Exported functions
-export rhs!, getu, getu!, setu!, getmu, getmu!, setmu!, getvars, getvars!,
+export getu, getu!, setu!, getmu, getmu!, setmu!, getvars, getvars!,
     setvars!, muidx, active, active!, dim_u, dim_mu, dim_phi, dim_psi,
-    mu_idx, mu_name
+    mu_idx, mu_name, eval_efuncs!, eval_mfuncs!
 
 #--- State variables
 
 struct StateVar{T <: Number}
     name::String  # name of the state variable
-    u::Vector{T}  # initial state (mutable)
+    u::Vector{T}  # initial state (may be changed during continuation)
+    t::Vector{T}  # initial tangent (may be changed during continuation)
 end
+StateVar(name::String, u::Vector{T}) where {T <: Number} = StateVar(name, u, Vector{T}())
 
 #--- Zero functions (otherwise known as zero problems)
 
@@ -158,7 +160,7 @@ function resize!(closed::ClosedEmbeddedFunctions)
     closed
 end
 
-@generated function rhs!(
+@generated function eval_efuncs!(
         res::AbstractVector{T},
         closed::ClosedEmbeddedFunctions{T, F, FU, G, GU},
         prob,
@@ -194,6 +196,33 @@ end
             push!(body.args, :(res[closed.Ψᵢ[$i]] = closed.Ψ[$i].f(prob, u) - closed.μ[$i]))
         else
             push!(body.args, :(res[closed.Ψᵢ[$i]] = closed.Ψ[$i].f(prob, $((:(closed.uᵥ[closed.Ψᵤ[$i][$j]]) for j in eachindex(GU.parameters[i].parameters))...)) - closed.μ[$i]))
+        end
+    end
+    push!(body.args, :res)
+    body
+end
+
+@generated function eval_mfuncs!(
+        res::AbstractVector{T},
+        closed::ClosedEmbeddedFunctions{T, F, FU, G, GU},
+        prob,
+        u::AbstractVector{T}
+        ) where {T <: Number, F, FU, G, GU}
+    body = quote
+        # Views on the state variables get reused, so precompute them
+        for i = eachindex(closed.uᵢ)
+            (i0, i1) = closed.uᵢ[i]
+            closed.uᵥ[i] = view(u, i0:i1)
+        end
+    end
+    for i in eachindex(GU.parameters)
+        # Construct function calls of the form res[i] = Ψ[i](uᵥ[Ψᵤ[i][1]], ..., uᵥ[Ψᵤ[i][n]])
+        # Uses the return value of Ψ in contrast to Φ since it is assumed to be ℝ rather than ℝⁿ
+        if length(GU.parameters[i].parameters) == 0
+            # No dependencies means pass everything
+            push!(body.args, :(res[$i] = closed.Ψ[$i].f(prob, u)))
+        else
+            push!(body.args, :(res[$i] = closed.Ψ[$i].f(prob, $((:(closed.uᵥ[closed.Ψᵤ[$i][$j]]) for j in eachindex(GU.parameters[i].parameters))...))))
         end
     end
     push!(body.args, :res)
