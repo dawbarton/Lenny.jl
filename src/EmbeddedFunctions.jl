@@ -58,7 +58,7 @@ struct ClosedEmbeddedFunctions{T <: Number,
     Φᵢ::Vector{Tuple{Int, Int}}
     μ::Vector{T}
     μᵢ::Vector{Int}
-    μₛ::Dict{String, Int}
+    μs::Dict{String, Int}
     𝕁::Vector{Bool}  # 𝕁 denotes active continuation parameters (i.e., continuation parameters that vary)
     Ψ::G
     Ψᵤ::GU
@@ -100,7 +100,7 @@ function ClosedEmbeddedFunctions(Φ::Vector{<: ZeroFunction{T}}, Ψ::Vector{<: M
     Φᵢ = Vector{Tuple{Int, Int}}(undef, length(Φ))
     Ψᵤ = []  # a vector of tuples of different lengths so needs to be Any
     𝕁 = Bool[]
-    μₛ = Dict{String, Int}()
+    μs = Dict{String, Int}()
     for i = eachindex(Ψ)
         ψ = Ψ[i]
         ψᵤ = Int[]
@@ -112,14 +112,14 @@ function ClosedEmbeddedFunctions(Φ::Vector{<: ZeroFunction{T}}, Ψ::Vector{<: M
         end
         push!(𝕁, ψ.active)
         push!(Ψᵤ, (ψᵤ...,))
-        push!(μₛ, ψ.μ_name => i)
+        push!(μs, ψ.μ_name => i)
     end
     Ψᵢ = Vector{Int}(undef, length(Ψ))
     uᵢ = Vector{Tuple{Int, Int}}(undef, length(u))
     uᵥ = Vector{SimpleView{T}}(undef, length(u))
     μ = Vector{T}(undef, length(Ψ))
     μᵢ = Vector{Int}(undef, length(μ))
-    closed = ClosedEmbeddedFunctions(u, uᵢ, uᵥ, (Φ...,), (Φᵤ...,), Φᵢ, μ, μᵢ, μₛ, 𝕁, (Ψ...,), (Ψᵤ...,), Ψᵢ)
+    closed = ClosedEmbeddedFunctions(u, uᵢ, uᵥ, (Φ...,), (Φᵤ...,), Φᵢ, μ, μᵢ, μs, 𝕁, (Ψ...,), (Ψᵤ...,), Ψᵢ)
     resize!(closed)
 end
 
@@ -235,7 +235,7 @@ end
 Return the index in the continuation parameter vector of the specified
 continuation parameter `μ`.
 """
-mu_idx(closed::ClosedEmbeddedFunctions, μ::String) = closed.μₛ[μ]
+mu_idx(closed::ClosedEmbeddedFunctions, μ::String) = closed.μs[μ]
 mu_idx(closed::ClosedEmbeddedFunctions, μ::Integer) = μ
 
 """
