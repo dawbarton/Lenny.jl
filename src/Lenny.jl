@@ -55,6 +55,7 @@ mutable struct ContinuationProblem{T <: Number} <: AbstractContinuationProblem{T
     linsolver::Union{Missing, AbstractLinSolver{T}}
     toolboxes::Vector{AbstractToolbox{T}}
     μ_range::Vector{Pair{String, Tuple{T, T}}}
+    dim::Int
 end
 
 function ContinuationProblem(T::DataType=Float64)
@@ -76,7 +77,7 @@ function ContinuationProblem(T::DataType=Float64)
         addsignal!(callbacks, "after_"*signal)
     end
     # Construct
-    ContinuationProblem{T}(Φ, Ψ, callbacks, opts, covering, nlsolver, linsolver, toolboxes, μ_range)
+    ContinuationProblem{T}(Φ, Ψ, callbacks, opts, covering, nlsolver, linsolver, toolboxes, μ_range, 1)
 end
 
 #--- Helper functions
@@ -105,12 +106,12 @@ struct ClosedContinuationProblem{T <: Number,
     linsolver::LS
     toolboxes::Vector{AbstractToolbox{T}}
     μ_range::Vector{Pair{Int, Tuple{T, T}}}
+    dim::Int
 end
 
 #--- Close a continuation problem
 
 function close!(prob::ContinuationProblem{T}) where T
-    # All callbacks should be added by this point
     emitsignal(prob.callbacks, "before_close_continuationproblem", prob)
     for i = eachindex(prob.toolboxes)
        prob.toolboxes[i] = close!(prob, prob.toolboxes[i])
@@ -129,7 +130,7 @@ function close!(prob::ContinuationProblem{T}) where T
     emitsignal(prob.callbacks, "after_close_nlsolver", prob)
     emitsignal(prob.callbacks, "before_close_covering", prob)
     if ismissing(prob.covering)
-        prob.covering = DefaultCovering(T)
+        prob.covering = DefaultCovering(T, prob.dim)
     end
     close!(prob, prob.covering)
     emitsignal(prob.callbacks, "after_close_covering", prob)
@@ -138,7 +139,8 @@ function close!(prob::ContinuationProblem{T}) where T
         push!(μ_range, mu_idx(prob.covering, μ) => range)
     end
     newprob = ClosedContinuationProblem(prob.Φ, prob.Ψ, prob.callbacks,
-        prob.covering, prob.nlsolver, prob.linsolver, prob.toolboxes, μ_range)
+        prob.covering, prob.nlsolver, prob.linsolver, prob.toolboxes, μ_range,
+        prob.dim)
     emitsignal(prob.callbacks, "after_close_continuationproblem", newprob)
     newprob
 end

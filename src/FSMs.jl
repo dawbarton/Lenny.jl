@@ -6,11 +6,12 @@ module FSMs
 export FSM
 
 # Exported functions
-export fsm_init!, fsm_run!
+export fsm_run!
 
 #--- Dependencies
 
 using ..Callbacks
+import ..Lenny: close!
 
 #--- States of the finite state machine
 
@@ -24,32 +25,48 @@ end
 
 mutable struct FSM
     run::Bool
-    allstates::Vector{FSMState}
-    state::FSMState
+    states::Vector{FSMState}
+    state_funcs::Vector{Any}
+    curr_state::FSMState
     next_state::FSMState
     error_state::FSMState
 end
 
 """
-    fsm_init!(callbacks::CallbackSignals, states::Tuple)
+    FSM(states)
 
-Initialise a finite state machine using the callbacks and states passed.
-"before" and "after" signals will be added to the callbacks object for each
-state. The initial state is set to the first element of the tuple.
+Initialise a finite state machine using the states provided. The FSM must be
+closed before running it.
 """
-function fsm_init!(callbacks::CallbackSignals, states::Tuple)
-    allstates = Vector{FSMState}()
+function FSM(states)
+    states_ = []
     for state in states
+        push!(states_, state)
+    end
+    emptystate = FSMState(missing, missing, missing)
+    FSM(true, Vector{FSMState}(), states_, emptystate, emptystate, emptystate)
+end
+
+"""
+    close!(fsm::FSM, callbacks::CallbackSignals)
+
+Close a finite state machine by extracting the specified callbacks for each
+state and generating specialised FSMStates for each state. "before" and "after"
+signals will be added to the callbacks object for each state. The initial state
+is set to the first element of the tuple.
+"""
+function close!(prob, fsm::FSM)
+    for state in fsm.state_funcs
         func = string(state)
         func_before = func*"_before"
         func_after = func*"_after"
-        addsignal!(callbacks, func_before)
-        addsignal!(callbacks, func_after)
+        addsignal!(prob.callbacks, func_before)
+        addsignal!(prob.callbacks, func_after)
         before = callbacks[func_before]
         after = callbacks[func_after]
-        push!(allstates, FSMState(before, state, after))
+        push!(fsm.states, FSMState(before, state, after))
     end
-    FSM(true, allstates, allstates[1], allstates[2], allstates[2])
+    fsm.curr_state = fsm.states[1]
 end
 
 """
@@ -69,7 +86,7 @@ function fsm_run!(problem, fsm::FSM)
     while fsm.run
         # This will be dynamic dispatch but it's unavoidable as far as I can
         # tell since the route through the state machine is unknown a priori
-        fsm_step!(problem, fsm, fsm.state)
+        fsm_step!(problem, fsm, fsm.curr_state)
     end
 end
 

@@ -7,6 +7,8 @@ using ..Lenny: add!, AbstractContinuationProblem, ZeroFunction, StateVar
 using ..EmbeddedFunctions: ClosedEmbeddedFunctions, dim_u, dim_mu, dim_phi,
     dim_psi, active, active!
 import ..EmbeddedFunctions: mu_idx
+using ..FSMs: FSM, fsm_run!
+using ..Callbacks: CallbackSignals
 
 #--- Exports
 
@@ -15,6 +17,25 @@ export AbstractCovering, Covering
 
 # Exported functions
 export DefaultCovering
+
+#--- Finite State Machine to do the covering
+
+function state_init! end
+function state_error! end
+function state_predict! end
+function state_correct! end
+function state_flush! end
+
+const fsm_states = (state_init!, state_error!, state_predict!, state_correct!, state_flush!)
+
+# This enables easy indexing into the list of all FSM states; i.e. fsm.allstates[state_init] works
+for i = 1:length(fsm_states)
+    # This must match the FSM constructor
+    state = fsm_states[i]
+    let i = i
+        Base.to_index(::typeof(state)) = i
+    end
+end
 
 #--- Base covering type
 
@@ -75,19 +96,24 @@ end
 
 #--- Covering type
 
-struct Covering{T <: Number, E} <: AbstractCovering{T}
+struct Covering{T <: Number, E, A <: AbstractAtlas} <: AbstractCovering{T}
     opts::CoveringOptions{T}
     efuncs::E
     currentcurve::Curve{T}
-    atlas::Atlas{T}
+    atlas::A
+    fsm::FSM
 end
 
-function Covering(T::DataType)
+function Covering(T::DataType, dim::Int)
     opts = CoveringOptions(T)
     efuncs = nothing
     currentcurve = Curve(T)
-    atlas = Atlas(T)
-    Covering(opts, efuncs, currentcurve, atlas)
+    if dim == 1
+        atlas = Atlas(T)
+    else
+        throw(ArgumentError("Only able to handle dim=1 at the moment"))  # TODO
+    end
+    Covering(opts, efuncs, currentcurve, atlas, fsm_init!(callbacks, ))
 end
 
 function Covering(covering::Covering{T}, efuncs::ClosedEmbeddedFunctions{T}) where T
@@ -136,23 +162,5 @@ function projectioncondition!(
     res[1] = pr
 end
 
-#--- Finite State Machine to do the covering
-
-function state_init! end
-function state_error! end
-function state_predict! end
-function state_correct! end
-function state_flush! end
-
-const fsm_states = (state_init!, state_error!, state_predict!, state_correct!, state_flush!)
-
-# This enables easy indexing into the list of all FSM states; i.e. fsm.allstates[state_init] works
-for i = 1:length(fsm_states)
-    # This must match the FSM constructor
-    state = fsm_states[i]
-    let i = i
-        Base.to_index(::typeof(state)) = i
-    end
-end
 
 end # module
