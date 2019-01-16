@@ -4,6 +4,7 @@ module EmbeddedFunctions
 
 import Base: resize!
 
+
 #--- Exports
 
 # Exported types
@@ -14,6 +15,7 @@ export getu, getu!, setu!, getmu, getmu!, setmu!, getvars, getvars!,
     setvars!, muidx, active, active!, dim_u, dim_mu, dim_phi, dim_psi,
     mu_idx, mu_name, eval_efuncs!, eval_mfuncs!
 
+
 #--- State variables
 
 struct StateVar{T <: Number}
@@ -22,6 +24,7 @@ struct StateVar{T <: Number}
     t::Vector{T}  # initial tangent (may be changed during continuation)
 end
 StateVar(name::String, u::Vector{T}) where {T <: Number} = StateVar(name, u, Vector{T}())
+
 
 #--- Zero functions (otherwise known as zero problems)
 
@@ -32,6 +35,7 @@ struct ZeroFunction{T <: Number, F}
 end
 ZeroFunction(f, u::Vector{StateVar{T}}, m::Integer) where T <: Number = ZeroFunction(f, u, Vector{T}(undef, m))
 
+
 #--- Monitor functions
 
 struct MonitorFunction{T <: Number, F}
@@ -40,6 +44,7 @@ struct MonitorFunction{T <: Number, F}
     μ_name::String  # name of the continuation parameter
     active::Bool  # whether the continuation parameter is active initially
 end
+
 
 #--- Closed functions (for computational speed)
 

@@ -1,2 +1,5 @@
-._tune.json
-benchmark/results.jld2
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
+/deps/deps.jl
+/docs/build

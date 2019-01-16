@@ -2,165 +2,47 @@ module Coverings
 
 #--- Dependencies
 
-import ..Lenny: close!
-using ..Lenny: add!, AbstractContinuationProblem, ZeroFunction, StateVar
-using ..EmbeddedFunctions: ClosedEmbeddedFunctions, dim_u, dim_mu, dim_phi,
-    dim_psi, active, active!
-import ..EmbeddedFunctions: mu_idx
-using ..FSMs: FSM, fsm_run!
-using ..Callbacks: CallbackSignals
+using ..Lenny: AbstractCovering
+import ..Lenny: initialise
 
-#--- Exports
+using ..ZeroProblems: dimdeficit, zeroproblem
 
-# Exported types
-export AbstractCovering, Covering
 
-# Exported functions
-export DefaultCovering
-
-#--- Finite State Machine to do the covering
-
-function state_init! end
-function state_error! end
-function state_predict! end
-function state_correct! end
-function state_flush! end
-
-const fsm_states = (state_init!, state_error!, state_predict!, state_correct!, state_flush!)
-
-# This enables easy indexing into the list of all FSM states; i.e. fsm.allstates[state_init] works
-for i = 1:length(fsm_states)
-    # This must match the FSM constructor
-    state = fsm_states[i]
-    let i = i
-        Base.to_index(::typeof(state)) = i
-    end
+#--- DefaultCovering - automatically selects an appropriate covering depending on the dimensionality deficit
+struct DefaultCovering{T} <: AbstractCovering{T}
 end
 
-#--- Base covering type
-
-abstract type AbstractCovering{T <: Number} end
-
-close!(prob, covering::AbstractCovering) = covering
-
-#--- Charts
-
-struct Chart{T}
-    u::Vector{T}  # all states
-    t::Vector{T}
-end
-
-function Chart(T::DataType)
-    u = T[]
-    t = T[]
-    Chart(u, t)
-end
-
-#--- Curves
-
-mutable struct Curve{T}
-    charts::Vector{Chart{T}}
-    currentchart::Chart{T}
-    status  # TODO: make concrete
-end
-
-function Curve(T::DataType)
-    charts = Chart{T}[]
-    currentchart = Chart(T)
-    status = 0
-    Curve(charts, currentchart, status)
-end
-
-#--- Atlases
-
-struct Atlas{T}
-    charts::Vector{Chart{T}}
-end
-
-function Atlas(T::DataType)
-    charts = Chart{T}[]
-    Atlas(charts)
-end
-
-#--- Covering options
-
-struct CoveringOptions{T <: Number}
-    dim::Int
-    # other parameters
-end
-
-function CoveringOptions(T::DataType)
-    dim = 1
-    CoveringOptions{T}(dim)
-end
-
-#--- Covering type
-
-struct Covering{T <: Number, E, A <: AbstractAtlas} <: AbstractCovering{T}
-    opts::CoveringOptions{T}
-    efuncs::E
-    currentcurve::Curve{T}
-    atlas::A
-    fsm::FSM
-end
-
-function Covering(T::DataType, dim::Int)
-    opts = CoveringOptions(T)
-    efuncs = nothing
-    currentcurve = Curve(T)
-    if dim == 1
-        atlas = Atlas(T)
-    else
-        throw(ArgumentError("Only able to handle dim=1 at the moment"))  # TODO
-    end
-    Covering(opts, efuncs, currentcurve, atlas, fsm_init!(callbacks, ))
-end
-
-function Covering(covering::Covering{T}, efuncs::ClosedEmbeddedFunctions{T}) where T
-    Covering(covering.opts, efuncs, covering.currentcurve, covering.atlas)
-end
-
-DefaultCovering(T::DataType) = Covering(T)
-
-# Some forwards
-mu_idx(covering::Covering, μ) = mu_idx(covering.efuncs, μ)
-mu_name(covering::Covering, μ) = mu_name(covering.efuncs, μ)
-
-#--- Close the covering
-
-function close!(prob, covering::Covering{T}) where T
-    # TODO: this is hard coded to a 1D covering... need to work out the separation between covering and atlas construction
-    # Add the projection condition as a closure
-    add!(prob, ZeroFunction((res, prob, u) -> projectioncondition!(res, prob, u, covering), StateVar{T}[], 1))
-    # Close the efuncs functions
-    efuncs = ClosedEmbeddedFunctions(prob.Φ, prob.Ψ)
-    # Make the initial continuation variables active
-    for (μ, range) in prob.μ_range
-        active!(efuncs, μ, true)
-    end
-    totalvars = dim_u(efuncs) + active(efuncs)
-    totalfuncs = dim_phi(efuncs) + dim_psi(efuncs)
-    # Check the dimensionality of the problem
-    if totalvars != totalfuncs
-        throw(DimensionMismatch("Dimensionality mismatch between the number of equations ($totalfuncs) and the number of unknowns ($totalvars)"))
-    end
-    # Return the covering with efuncs
-    prob.covering = Covering(covering, efuncs)
-end
-
-function projectioncondition!(
-        res::AbstractVector{T},
-        prob::AbstractContinuationProblem{T},
-        u::AbstractVector{T},
-        covering::Covering{T}
-        ) where T
-    pr = zero(T)
-    chart = covering.currentcurve.currentchart
-    for i = eachindex(u)
-        pr += chart.t[i]*(u[i] - chart.u[i])
-    end
-    res[1] = pr
+function initialise(cov::DefaultCovering{T}, prob) where T
+	# Choose a covering based on the dimensionality deficit
+	dimdef = dimdeficit(zeroproblem(prob))
+	if dimdef == 0
+		return initialise(Covering0d{T}(), prob)
+	elseif dimdef == 1
+		return initialise(Covering1d{T}(), prob)
+	else
+		error("DefaultCovering can only compute 0 or 1 dimensional manifolds")
+	end
 end
 
 
-end # module
+#--- 0 dimensional covering code
+struct Covering0d{T} <: AbstractCovering{T}
+end
+
+function initialise(cov::Covering0d{T}, prob) where T
+	# grab any necessary options from the problem structure
+	return cov
+end
+
+
+#--- 1 dimensional covering code
+struct Covering1d{T} <: AbstractCovering{T}
+end
+
+function initialise(cov::Covering1d{T}, prob) where T
+	# grab any necessary options from the problem structure
+	return cov
+end
+
+
+end # end module
