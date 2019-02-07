@@ -20,7 +20,8 @@ function solver end
 
 include("FiniteStateMachines.jl")
 include("Coverings.jl")
-include("EmbeddedFunctions.jl")
+include("ZeroProblems.jl")
+include("ODEs.jl")
 
 
 #--- Basic continuation problem structure (user facing)
@@ -29,7 +30,7 @@ mutable struct ContinuationProblem{T} <: AbstractContinuationProblem{T}
 	options::Dict{String, Any}
 	toolboxes::Vector{AbstractToolbox{T}}
 	covering::AbstractCovering{T}
-	efuncs::AbstractEmbeddedFunctions{T}
+	efuncs
 	solver::AbstractSolver{T}
 end
 

@@ -5,7 +5,7 @@ module Coverings
 using ..Lenny: AbstractCovering
 import ..Lenny: initialise
 
-using ..ZeroProblems: dimdeficit, zeroproblem
+#using ..ZeroProblems: dimdeficit, zeroproblem
 
 
 #--- DefaultCovering - automatically selects an appropriate covering depending on the dimensionality deficit
